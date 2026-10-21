@@ -89,15 +89,6 @@ function buildConversationTree(threads: readonly PluginSidebarThread[], mainThre
   };
 }
 
-// Chats retains its existing recent/attention policy.
-export function conversationTree(threads: readonly PluginSidebarThread[], mainThreadId: string | null, activeThreadId: string | null, recentLimit = 4) {
-  const { summaries, ...tree } = buildConversationTree(threads, mainThreadId, activeThreadId);
-  return {
-    ...tree,
-    recent: tree.roots.filter((thread, index) => index < recentLimit || summaries.get(thread.id)!.keepVisible),
-    other: tree.roots.filter((thread, index) => index >= recentLimit && !summaries.get(thread.id)!.keepVisible),
-  };
-}
 
 export function orderedBotConversationTree(threads: readonly PluginSidebarThread[], order: readonly string[] = [], activeThreadId: string | null = null) {
   const tree = buildConversationTree(threads, null, activeThreadId);

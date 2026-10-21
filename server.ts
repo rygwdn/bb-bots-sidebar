@@ -13,6 +13,7 @@ import { listBotConversations } from "./lib/bot-conversations";
 import { botProjectContext } from "./lib/project-context";
 import { BOT_GUIDANCE, botInstructions } from "./lib/bot-instructions";
 import { MEMORY_MAX_CHARS, validateMemory } from "./lib/memory-limit";
+import { registerThreadListBackend } from "./integration/thread-list-backend";
 export { rpcContract, avatarSchema } from "./contract";
 export type { BotAvatar, BotMetadata, BotSection, ProjectCreateInput } from "./contract";
 
@@ -21,6 +22,7 @@ const START_MARKER = /^\[bb-bot-start:([a-f0-9-]{36})\]/;
 const sha256 = (content: string) => createHash("sha256").update(content).digest("hex");
 
 export default async function plugin(bb: BbPluginApi) {
+  registerThreadListBackend(bb);
   const store = createBotStore(bb);
   const publish = () => bb.realtime.publish(CHANGED, { updatedAt: Date.now() });
   const state = createPrivateBotState(bb, store, publish);

@@ -44,28 +44,36 @@ async function mount(fail = false, afterAssignment?: () => Promise<void>) {
     },
   });
   await slot.findByText("Atlas");
+  // The unassigned conversation lives in the native bottom list, which renders
+  // asynchronously once the host resolved the thread list.
+  await waitFor(() => expect(slot.container.querySelector('[data-sidebar-thread-id="chat"]')).not.toBeNull());
   const source = slot.container.querySelector<HTMLElement>('[data-sidebar-thread-id="chat"]')!;
   const target = slot.container.querySelector<HTMLElement>('[data-bot-drop-target="nova"]')!;
   return { slot, source, target, bindings, onNavigate };
 }
-function down(source: HTMLElement, pointerType = "mouse") { fireEvent.pointerDown(source, { button: 0, buttons: 1, pointerId: 1, pointerType, clientX: 40, clientY: 300 }); }
+// Alt+left starts the bot assignment gesture; ordinary drags stay native.
+function down(source: HTMLElement, pointerType = "mouse", altKey = true) { fireEvent.pointerDown(source, { button: 0, buttons: 1, pointerId: 1, pointerType, altKey, clientX: 40, clientY: 300 }); }
 function move(target: Element | null) { hit = target; fireEvent.pointerMove(window, { buttons: 1, pointerId: 1, clientX: 40, clientY: 100 }); }
 function up(shiftKey = false) { fireEvent.pointerUp(window, { button: 0, buttons: 0, pointerId: 1, clientX: 40, clientY: 100, shiftKey }); }
+// The native row container marks a row that belongs to the host's thread list.
+function nativeRow(container: HTMLElement, id: string): HTMLElement | null {
+  const anchor = container.querySelector<HTMLElement>(`[data-sidebar-thread-id="${id}"]`);
+  return anchor?.closest<HTMLElement>("[data-sidebar-rename-row]") ?? null;
+}
 
 it("drags a project-associated private chat onto a bot without prior membership or navigation", async () => {
   const { slot, source, target, bindings, onNavigate } = await mount();
   down(source); move(target);
   expect(target.getAttribute("data-conversation-drop")).toBe("true");
-  expect(source.parentElement?.getAttribute("data-conversation-dragging")).toBe("true");
+  expect(slot.container.querySelector('[data-conversation-dragging="true"]')).not.toBeNull();
   expect(target.textContent).toContain("Add to end");
   expect(document.querySelector(".conversation-drag-ghost")).not.toBeNull();
   up(); fireEvent.click(target.querySelector("button")!);
   await waitFor(() => expect(bindings).toContainEqual({ threadId: "chat", botId: "nova" }));
-  await waitFor(() => expect(slot.container.querySelector('.recent-row [data-sidebar-thread-id="chat"]')).toBeNull());
+  await waitFor(() => expect(nativeRow(slot.container, "chat")).toBeNull());
   expect(slot.inspection.rpcCalls.filter(call => call.method === "conversation_assign")).toEqual([{ method: "conversation_assign", input: { threadId: "chat", botId: "nova", placeFirst: false } }]);
   expect(slot.inspection.rpcCalls.some(call => call.method === "bots_reorder" || call.method === "main_set")).toBe(false);
   expect(slot.inspection.navigateCalls).toEqual([]); expect(onNavigate).not.toHaveBeenCalled();
-  expect(split.onPointerDown).toHaveBeenCalledOnce();
   expect(bindings.find(entry => entry.threadId === "assigned-child")?.botId).toBe("atlas");
   expect(document.querySelector(".conversation-drag-ghost")).toBeNull();
   await waitFor(() => expect(target.querySelector(".conversation-disclosure")?.getAttribute("aria-expanded")).toBe("true"));
@@ -141,10 +149,10 @@ it("unfolds immediately after append succeeds and reveals the added row after a 
   }
 });
 
-it("normal clicks still navigate, but touch scrolling never starts assignment dragging", async () => {
+it("leaves ordinary drags to the host and never starts assignment dragging for touch", async () => {
   const { slot, source, target } = await mount();
-  down(source); hit = source; fireEvent.pointerUp(window, { pointerId: 1, clientX: 40, clientY: 300 }); fireEvent.click(source);
-  expect(slot.inspection.navigateCalls).toContainEqual({ method: "toThread", threadId: "chat", options: { split: false } });
+  down(source, "mouse", false); hit = source; fireEvent.pointerUp(window, { pointerId: 1, clientX: 40, clientY: 300 });
+  expect(slot.inspection.rpcCalls.some(call => call.method === "conversation_assign")).toBe(false);
   down(source, "touch"); move(target); up();
   expect(document.querySelector(".conversation-drag-ghost")).toBeNull();
   expect(slot.inspection.rpcCalls.some(call => call.method === "conversation_assign")).toBe(false);
@@ -166,7 +174,7 @@ it("does not assign to a different bot moved beneath the pointer after the last 
 it("keeps the chat in place and shows the server error on failure", async () => {
   const { slot, source, target } = await mount(true); down(source); move(target); up();
   expect((await slot.findByRole("alert")).textContent).toContain("Assignment failed");
-  expect(slot.container.querySelector('.recent-row [data-sidebar-thread-id="chat"]')).not.toBeNull();
+  expect(nativeRow(slot.container, "chat")).not.toBeNull();
   expect(document.querySelector(".conversation-drag-ghost")).toBeNull();
 });
 

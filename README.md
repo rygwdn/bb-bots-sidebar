@@ -16,6 +16,25 @@ when it owns none. Explicit project/worktree starts can choose any available wor
 project and join the selected bot to it. Creating a bot never creates a
 backing BB project or writes `SOUL.md` into a repository.
 
+## Builtin thread list
+
+The lower **Chats** section now renders a pinned copy of BB's builtin thread
+list, not the bot plugin's former custom recent-chat rows. Bot-owned threads
+(including inherited children) are excluded; everything else keeps the builtin
+grouping, sections, pinning, search, keyboard navigation, native drag behavior,
+and shared SDK action/status extension points.
+
+Keep BB's bundled **Thread list** plugin enabled. It remains authoritative for
+layout preferences, its CLI, and the shared **Move to section** action. Writes
+from this sidebar update that same store immediately; changes made elsewhere
+are reconciled within three seconds. Extensions depending on the shared SDK
+work normally; extensions that assume private builtin DOM or plugin-local
+frontend state are not guaranteed compatible.
+
+Use **Assign to bot…** in a native row's menu, or **Alt-drag** a row onto a bot.
+Ordinary drags remain builtin reorder/nest/split gestures. Touch users can use
+the menu without competing drag sensors.
+
 ## New conversation defaults
 
 In **Edit bot → Bot → New conversations**, choose an optional preferred
@@ -177,8 +196,8 @@ in bot state.
   machine. With multiple owned projects, prefer the first conversation's project if owned, then
   the first owned project in link order. Mere membership does not change the
   personal-workspace default. The project and machine remain editable.
-- Drag an unassigned conversation from **Chats** onto a bot, or use **Assign to
-  bot…** from its menu. Any bot can be chosen; it joins the conversation's work
+- **Alt-drag** an unassigned conversation from **Chats** onto a bot, or use
+  **Assign to bot…** from its menu. Any bot can be chosen; it joins the conversation's work
   project as a member if needed. Projectless chats need no project link. History,
   project, environment and existing child assignments stay unchanged. A drop does
   not navigate away; use the confirmation's **View** action to open it.
@@ -270,19 +289,72 @@ switching storage versions; the prior code checkpoint is
 Use BB 0.46.1 or newer and Node.js 24. No BB-core change is required for this model.
 
 ```sh
-git clone --branch main https://github.com/tobi/bb-bots-sidebar.git
+git clone --branch main https://github.com/rygwdn/bb-bots-sidebar.git
 cd bb-bots-sidebar
 npm ci
 npm run typecheck
 npm test
-bb plugin build
+npm run test:thread-list
+npm run build
 bb plugin install . --yes
 ```
 
-The source began with BB's standard scaffold, not another sidebar plugin. Avatar
-appearance options are adapted from [bloub](https://github.com/jeremy-prt/bloub).
-See [third-party notices](THIRD_PARTY_NOTICES.md) for its MIT attribution.
-Dependencies are installed independently; no other BB plugin is required.
+This fork tracks [tobi/bb-bots-sidebar](https://github.com/tobi/bb-bots-sidebar).
+Avatar appearance options are adapted from
+[bloub](https://github.com/jeremy-prt/bloub). The builtin list and shared UI are
+copied from [get-bb/bb](https://github.com/get-bb/bb).
+See [third-party notices](THIRD_PARTY_NOTICES.md) for attribution.
+Dependencies are installed independently; BB's bundled Thread list plugin must
+remain enabled.
+
+### Updating the builtin list (priority)
+
+`vendor/bb/manifest.json` pins the BB commit and SHA-256 of every imported file.
+`vendor/bb` is byte-exact upstream source, including its tests and license.
+Never edit it manually. Local behavior lives in `integration/`; the ignored
+`.generated/bb` tree only reroutes imports to the SDK bridge and isolated shared
+UI. Keep that bridge small when upgrading rather than patching upstream rows.
+
+```sh
+# Select a BB commit compatible with the installed host/SDK:
+npm run vendor:update -- --ref <bb-commit>
+# Or import committed HEAD from an existing BB checkout (ignores dirty files):
+npm run vendor:update -- --source /absolute/path/to/bb
+npm run vendor:check
+npm run typecheck
+npm test -- --maxWorkers=1
+npm run test:thread-list -- --maxWorkers=1
+npm run build
+```
+
+The updater replaces the managed snapshot, removes obsolete files, records the
+source commit, and refuses to overwrite hash drift. `vendor:check` also rejects
+missing and unexpected files. Fetching is explicit, never a build-time network
+dependency. Commit the snapshot, manifest, dependency/lockfile changes, and any
+necessary bridge adaptation together. Upstream tests run against the generated
+overlay without editing their source. New builtin action registrations require
+explicit review to avoid duplicating the bundled plugin's global actions.
+
+Before installing, smoke-test bot ownership filtering, native pin/section
+changes, a contributed action (for example Notifications), preference changes
+through `bb thread-list`, and menu/Alt-drag assignment.
+
+### Updating the bot sidebar (secondary)
+
+Keep `origin` pointed at this fork and `upstream` at the original bot plugin:
+
+```sh
+git remote add upstream https://github.com/tobi/bb-bots-sidebar.git # once
+git fetch upstream
+git merge upstream/main
+```
+
+Resolve bot UI/server changes in their original files while retaining the
+`BuiltinThreadList` boundary and backend preference bridge. Do not restore the
+old custom Chats renderer or modify the BB snapshot to resolve bot conflicts.
+Keep this merge separate from a builtin snapshot update; run both test suites,
+typecheck, build, and the same live smoke checks before installing. This keeps
+bot merges conventional while builtin updates remain a mechanical import.
 
 ### Bot coordination
 

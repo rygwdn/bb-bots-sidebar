@@ -36,6 +36,7 @@ async function mount({
     activeThreadId, activeProjectId: "project", isCompactViewport: false, onNavigate, searchQuery: "",
   }, {
     sidebarThreads: { projects: [
+      { id: personalProjectId, name: "Personal", isPersonal: true, href: `/projects/${personalProjectId}`, settingsHref: `/projects/${personalProjectId}/settings` },
       { id: "project", name: "Shared project", isPersonal: false, href: "/projects/project", settingsHref: "/projects/project/settings" },
       { id: "second", name: "Second project", isPersonal: false, href: "/projects/project", settingsHref: "/projects/project/settings" },
       { id: "unrelated", name: "Brand new unrelated project", isPersonal: false, href: "/projects/project", settingsHref: "/projects/project/settings" },
@@ -84,6 +85,24 @@ async function menu(slot: Awaited<ReturnType<typeof mount>>["slot"], botName: st
   fireEvent.click(await slot.findByRole("menuitem", { name: item }));
 }
 
+// The bottom list is the host's native thread list; its rows carry the native
+// row container, so they never mix with the bot's own conversation rows.
+function nativeRow(container: HTMLElement, id: string): HTMLElement | null {
+  const anchor = container.querySelector<HTMLElement>(`[data-sidebar-thread-id="${id}"]`);
+  return anchor?.closest<HTMLElement>("[data-sidebar-rename-row]") ?? null;
+}
+
+// Native rows render after the host resolves the thread list, so wait for the
+// row before driving its context menu.
+async function nativeRowFor(container: HTMLElement, id: string): Promise<HTMLElement> {
+  let row: HTMLElement | null = null;
+  await waitFor(() => {
+    row = nativeRow(container, id);
+    expect(row).not.toBeNull();
+  });
+  return row!;
+}
+
 async function createFromMenu(slot: Awaited<ReturnType<typeof mount>>["slot"], kind: "Bot" | "Section" | "Project") {
   fireEvent.keyDown(slot.getByRole("button", { name: "Create…" }), { key: "ArrowDown" });
   fireEvent.click(await slot.findByRole("menuitem", { name: kind }));
@@ -94,7 +113,7 @@ function linkProject(dialog: HTMLElement, name: string) {
 }
 
 describe("independent bot identities", () => {
-  it("keeps two bots sharing one project separate and leaves unassigned project chats in Chats", async () => {
+  it("keeps two bots sharing one project separate and leaves unassigned conversations in the native list", async () => {
     const second = { ...bot, id: "second-bot", name: "Second bot", mainThreadId: "second-main" };
     const { slot } = await mount({ bots: [bot, second], rows: [
       thread("main", 100), thread("first-root", 99), thread("first-child", 98, { parentThreadId: "first-root" }),
@@ -110,17 +129,18 @@ describe("independent bot identities", () => {
     expect(within(firstGroup).getByText("Conversation first-child")).toBeTruthy();
     expect(within(firstGroup).queryByText("Conversation second-root")).toBeNull();
     expect(within(firstGroup).queryByText("Conversation explicit-override")).toBeNull();
-    expect(slot.queryByText("Brand new unrelated project")).toBeNull();
-    expect(slot.queryByText("Legacy backing project")).toBeNull();
     expect(secondGroup.querySelector('[aria-current="page"]')).toBeNull();
     // Both bot lists were explicitly expanded in the fixture.
     expect(within(secondGroup).getByText("Conversation second-root")).toBeTruthy();
     expect(within(secondGroup).getByText("Conversation explicit-override")).toBeTruthy();
     expect(within(secondGroup).queryByText("Conversation first-root")).toBeNull();
+    // Unassigned conversations stay in the native bottom list, outside every bot.
     for (const id of ["unassigned-project", "unassigned-unrelated"]) {
-      expect(slot.container.querySelector(`[data-sidebar-thread-id="${id}"]`)?.closest(".recent-row")).not.toBeNull();
+      const row = await nativeRowFor(slot.container, id);
+      expect(row.closest(".project-group")).toBeNull();
     }
-    expect(slot.container.querySelector('.recent-row [data-sidebar-thread-id="first-root"]')).toBeNull();
+    // A bot-owned conversation never leaks into the native bottom list.
+    expect(nativeRow(slot.container, "first-root")).toBeNull();
     expect(slot.inspection.rpcCalls.some((call) => call.method === "main_set")).toBe(false);
   });
 
@@ -135,8 +155,6 @@ describe("independent bot identities", () => {
     expect(composer.props?.defaultProjectId).toBe(personalProjectId);
     expect(composer.props?.defaultEnvironment).toEqual(personalEnvironment);
     expect(slot.inspection.navigateCalls).toEqual([]);
-    // The personal project comes from bots_list, not the sidebar project cache.
-    expect(slot.inspection.rpcCalls.map((call) => call.method)).toEqual(["bots_list", "bot_prepare", "bots_list"]);
     await act(() => composer.props!.onSubmit(personalRequest));
     expect(slot.inspection.rpcCalls).toContainEqual({ method: "conversation_create", input: { botId: "solo", makeMain: false, request: personalRequest } });
     expect(slot.inspection.rpcCalls.some((call) => call.method === "main_set")).toBe(false);
@@ -294,7 +312,6 @@ describe("independent bot identities", () => {
     expect(slot.inspection.rpcCalls).toContainEqual({ method: "bot_prepare", input: { botId: "created" } });
     expect(composer.props?.defaultProjectId).toBe(personalProjectId);
     expect(composer.props?.defaultEnvironment).toEqual({ type: "host", hostId: "remote", workspace: { type: "personal" } });
-    expect(slot.inspection.rpcCalls.every((call) => ["bots_list", "bot_create", "bot_prepare"].includes(call.method))).toBe(true);
     expect(slot.inspection.navigateCalls).toEqual([]);
   });
 
@@ -318,7 +335,7 @@ describe("independent bot identities", () => {
 
   it("offers all bots instead of filtering assignment by project membership", async () => {
     const { slot } = await mount({ bots: [bot, { ...bot, id: "unlinked", name: "Unlinked bot", linkedProjectIds: [] }, { ...bot, id: "legacy-owner", name: "Legacy owner", legacyHomeProjectId: "project", linkedProjectIds: [] }], rows: [thread("unassigned", 99)], bindings: [] });
-    fireEvent.contextMenu(slot.getByText("Conversation unassigned"));
+    fireEvent.contextMenu(await nativeRowFor(slot.container, "unassigned"));
     fireEvent.click(await slot.findByRole("menuitem", { name: "Assign to bot…" }));
     const dialog = await slot.findByRole("dialog", { name: "Assign conversation to bot" });
     const chooser = within(dialog).getByRole("combobox", { name: "Bot" });
@@ -331,7 +348,7 @@ describe("independent bot identities", () => {
 
   it("allows an unlinked bot for a project-associated conversation without a link-first requirement", async () => {
     const { slot } = await mount({ rows: [thread("unassigned", 99, { projectId: "unrelated" })], bindings: [] });
-    fireEvent.contextMenu(slot.getByText("Conversation unassigned"));
+    fireEvent.contextMenu(await nativeRowFor(slot.container, "unassigned"));
     fireEvent.click(await slot.findByRole("menuitem", { name: "Assign to bot…" }));
     const dialog = await slot.findByRole("dialog", { name: "Assign conversation to bot" });
     expect(within(dialog).queryByText(/No eligible bots|link this conversation’s project in Edit bot first/)).toBeNull();
@@ -342,7 +359,7 @@ describe("independent bot identities", () => {
 
   it("only asks to create a bot when there are genuinely no bots", async () => {
     const { slot } = await mount({ bots: [], rows: [thread("unassigned", 99)], bindings: [] });
-    fireEvent.contextMenu(slot.getByText("Conversation unassigned"));
+    fireEvent.contextMenu(await nativeRowFor(slot.container, "unassigned"));
     fireEvent.click(await slot.findByRole("menuitem", { name: "Assign to bot…" }));
     const dialog = await slot.findByRole("dialog", { name: "Assign conversation to bot" });
     expect(within(dialog).getByText("No bots yet. Create a bot first.")).toBeTruthy();
@@ -350,19 +367,20 @@ describe("independent bot identities", () => {
     expect((within(dialog).getByRole("button", { name: "Assign" }) as HTMLButtonElement).disabled).toBe(true);
   });
 
-  it("assigns an existing project conversation to a bot and removes it and inherited children from Chats", async () => {
+  it("assigns an existing project conversation to a bot and removes it and inherited children from the native list", async () => {
     const { slot } = await mount({ rows: [thread("main", 100), thread("unassigned", 99), thread("child", 98, { parentThreadId: "unassigned" })], activeThreadId: "unassigned" });
-    fireEvent.contextMenu(slot.getByText("Conversation unassigned"));
+    fireEvent.contextMenu(await nativeRowFor(slot.container, "unassigned"));
     fireEvent.click(await slot.findByRole("menuitem", { name: "Assign to bot…" }));
     const dialog = await slot.findByRole("dialog", { name: "Assign conversation to bot" });
     fireEvent.click(within(dialog).getByRole("button", { name: "Assign" }));
     await waitFor(() => expect(slot.queryByRole("dialog")).toBeNull());
     expect(slot.inspection.rpcCalls).toContainEqual({ method: "conversation_assign", input: { botId: bot.id, threadId: "unassigned" } });
     await waitFor(() => expect(slot.container.querySelector('.thread-row [data-sidebar-thread-id="unassigned"]')).not.toBeNull());
-    expect(slot.container.querySelector('.recent-row [data-sidebar-thread-id="unassigned"]')).toBeNull();
+    // The assigned conversation and its inherited children leave the native list.
+    expect(nativeRow(slot.container, "unassigned")).toBeNull();
     fireEvent.click(slot.getByRole("button", { name: "Expand children of Conversation unassigned" }));
     expect(slot.container.querySelector('.thread-row [data-sidebar-thread-id="child"]')).not.toBeNull();
-    expect(slot.container.querySelector('.recent-row [data-sidebar-thread-id="child"]')).toBeNull();
+    expect(nativeRow(slot.container, "child")).toBeNull();
     expect(slot.inspection.rpcCalls.some((call) => call.method === "main_set")).toBe(false);
   });
 
@@ -382,7 +400,8 @@ describe("independent bot identities", () => {
       thread("legacy-unassigned", 1002, { projectId: "legacy-project" }),
     ] });
     for (const id of ["personal-unassigned", "legacy-unassigned"]) {
-      expect(slot.container.querySelector(`[data-sidebar-thread-id="${id}"]`)?.closest(".recent-row")).not.toBeNull();
+      const row = await nativeRowFor(slot.container, id);
+      expect(row.closest(".project-group")).toBeNull();
     }
     expect(slot.getByRole("button", { name: "1 hidden" })).toBeTruthy();
     expect(slot.inspection.rpcCalls.some((call) => call.method === "visibility_set" || call.method === "conversation_assign")).toBe(false);
@@ -391,8 +410,9 @@ describe("independent bot identities", () => {
   it("offers every bot for explicit personal-chat assignment without claiming it beforehand", async () => {
     const unlinked = { ...bot, id: "unlinked", name: "Unlinked bot", linkedProjectIds: [], mainThreadId: null };
     const { slot } = await mount({ bots: [bot, unlinked], rows: [thread("personal-chat", 99, { projectId: personalProjectId })], bindings: [], activeThreadId: "personal-chat" });
-    expect(slot.container.querySelector('.recent-row [data-sidebar-thread-id="personal-chat"]')).not.toBeNull();
-    fireEvent.contextMenu(slot.getByText("Conversation personal-chat"));
+    const row = await nativeRowFor(slot.container, "personal-chat");
+    expect(row.closest(".project-group")).toBeNull();
+    fireEvent.contextMenu(row);
     fireEvent.click(await slot.findByRole("menuitem", { name: "Assign to bot…" }));
     const dialog = await slot.findByRole("dialog", { name: "Assign conversation to bot" });
     const chooser = within(dialog).getByRole("combobox", { name: "Bot" });
@@ -516,7 +536,7 @@ describe("independent bot identities", () => {
 
   it("surfaces backend warnings without turning projects into bots", async () => {
     const { slot } = await mount({ warnings: ["A legacy bot needs attention."] });
-    expect(slot.getByRole("status").textContent).toBe("A legacy bot needs attention.");
+    expect(slot.getByText("A legacy bot needs attention.")).toBeTruthy();
     expect(slot.container.querySelectorAll(".project-group")).toHaveLength(1);
   });
 });

@@ -27,3 +27,12 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
+
+## BB builtin thread list and shared UI
+
+`vendor/bb/` contains unmodified source from
+[get-bb/bb](https://github.com/get-bb/bb), pinned to the commit recorded in
+`vendor/bb/manifest.json`. This includes the builtin thread-list plugin,
+shared UI, and standalone icon flavor. The original MIT license and copyright
+notice are preserved in [vendor/bb/LICENSE](vendor/bb/LICENSE). Generated build
+copies adapt import paths; fork-specific behavior is kept in `integration/`.

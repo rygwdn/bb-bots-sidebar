@@ -1,6 +1,7 @@
 import { renderSlot as renderSdkSlot } from "@get-bb/plugin-sdk/testing/app";
 import type { RenderSlotOptions } from "@get-bb/plugin-sdk/testing/app";
 import { makeThreadResponse } from "@get-bb/plugin-sdk/testing";
+import { defaultPreferences } from "../vendor/bb/thread-list/shared/preferences";
 
 // The SDK deliberately doesn't emulate BB's registered thread actions. Supply
 // explicit test doubles; lifecycle tests control the resulting sidebar snapshot.
@@ -8,6 +9,7 @@ export function renderSlot<Props extends object>(registration: { component: Reac
   const nativeActionCalls: Array<{ key: string; threadId: string }> = [];
   const slot = renderSdkSlot(registration, props, {
     ...options,
+    rpc: { listPreferences: () => ({ preferences: defaultPreferences() }), setPreference: (input) => input, ...options.rpc },
     sdk: { ...options.sdk, threads: {
       update: async ({ threadId, title }) => makeThreadResponse({ id: threadId, title }),
       ...options.sdk?.threads,

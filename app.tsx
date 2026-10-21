@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
-import type { DragEvent, PointerEvent as ReactPointerEvent, ReactElement } from "react";
+import type { DragEvent, ReactElement } from "react";
 import { createPortal } from "react-dom";
 import { toast } from "sonner";
 import { useConversationDrop } from "./hooks/use-conversation-drop";
@@ -25,7 +25,7 @@ import type {
   PluginThreadListProps,
 } from "@get-bb/plugin-sdk/app";
 import type { BotAvatar, BotMetadata, BotSection, ProjectOwner, rpcContract } from "./contract";
-import { orderedBotConversationTree, conversationOwners, conversationTree } from "./lib/conversations";
+import { orderedBotConversationTree, conversationOwners } from "./lib/conversations";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -63,6 +63,8 @@ import { MEMORY_MAX_CHARS } from "./lib/memory-limit";
 import { emptyLaunchPreset, launchPresetSchema, type LaunchPreset } from "./lib/launch-preset";
 import { LaunchPresetEditor } from "./components/launch-preset-editor";
 import "./style.css";
+import { BuiltinThreadList, registerBuiltinThreadList } from "./integration/builtin-thread-list";
+import { BotThreadListContext } from "./integration/thread-list-sdk";
 
 const MENU_ITEM_CLASS = "bot-menu-item cursor-default select-none rounded-sm px-2 py-1.5 text-xs outline-none data-[disabled]:opacity-40";
 
@@ -516,75 +518,9 @@ function BotGroup({
   );
 }
 
-function RecentRow({
-  thread,
-  childrenByParent,
-  activePath,
-  navigate,
-  activeThreadId,
-  onNavigate,
-  onAssign,
-  onConversationDrag,
-  draggingThreadId,
-}: {
-  thread: PluginSidebarThread;
-  childrenByParent: Map<string, PluginSidebarThread[]>;
-  activePath: Set<string>;
-  navigate: BbNavigate;
-  activeThreadId: string | null;
-  onNavigate: () => void;
-  onAssign: (thread: PluginSidebarThread) => void;
-  onConversationDrag: (thread: PluginSidebarThread, event: ReactPointerEvent<HTMLElement>) => void;
-  draggingThreadId: string | null;
-}) {
-  const split = experimental_useSidebarThreadSplit(thread.id);
-  const shortcut = useSidebarThreadShortcut(thread.id);
-  const children = childrenByParent.get(thread.id) ?? [];
-  const branch = useConversationBranch(thread.id, activeThreadId, activePath);
-  const title = thread.displayTitle ?? thread.title ?? thread.titleFallback ?? "Untitled conversation";
-  const detail = thread.environment?.branchName ?? thread.host?.name ?? "Personal conversation";
-  return (
-    <li>
-      <ConversationContextMenu thread={thread} dragging={draggingThreadId === thread.id} items={[{ label: "Assign to bot…", action: () => onAssign(thread) }]}>
-      <div className="recent-row flex min-h-6 items-center rounded-md px-1 hover:bg-state-hover" data-conversation-dragging={draggingThreadId === thread.id} aria-current={activeThreadId === thread.id ? "page" : undefined} data-active-descendant={!branch.expanded && branch.containsActive}>
-      <a
-        href={thread.href}
-        {...split.splitProps}
-        onPointerDown={(event) => { split.splitProps.onPointerDown?.(event); onConversationDrag(thread, event); }}
-        ref={branch.rowRef}
-        role="link"
-        tabIndex={0}
-        onKeyDown={(event) => { if (event.key === "Enter") { event.preventDefault(); navigate.toThread(thread.id, { split: event.metaKey || event.ctrlKey }); onNavigate(); } }}
-        data-sidebar-thread-shortcut-target=""
-        data-sidebar-thread-id={thread.id} aria-keyshortcuts={shortcut?.ariaKeyshortcuts}
-        className="flex min-w-0 flex-1 cursor-pointer items-center gap-1.5 py-0.5"
-        aria-current={activeThreadId === thread.id ? "page" : undefined}
-        onClick={(event) => {
-          event.preventDefault();
-          navigate.toThread(thread.id, { split: event.metaKey || event.ctrlKey });
-          onNavigate();
-        }}
-      >
-        <span className="flex size-5 shrink-0 items-center justify-center">
-          <SidebarConversationStatus thread={thread} />
-        </span>
-        <span className="min-w-0 flex-1">
-          <span className="flex items-baseline gap-2">
-            <span className="min-w-0 flex-1 truncate text-[10px] font-medium leading-3 text-foreground"><ThreadTitle threadId={thread.id} /></span>{shortcut ? <kbd className="shrink-0 rounded bg-muted px-1 text-[9px]">{shortcut.label}</kbd> : null}
-          </span>
-          <span className="block truncate text-[8px] leading-[10px] text-muted-foreground">{detail}</span>
-        </span>
-      </a>
-      <ConversationArchiveButton thread={thread} />
-      <BranchToggle title={title} count={children.length} expanded={branch.expanded} childrenId={branch.childrenId} onToggle={branch.toggle} />
-      </div>
-      </ConversationContextMenu>
-      {children.length ? <ul id={branch.childrenId} className="conversation-children" hidden={!branch.expanded}>{branch.expanded ? children.map((child) => <RecentRow key={child.id} thread={child} childrenByParent={childrenByParent} activePath={activePath} navigate={navigate} activeThreadId={activeThreadId} onNavigate={onNavigate} onAssign={onAssign} onConversationDrag={onConversationDrag} draggingThreadId={draggingThreadId} />) : null}</ul> : null}
-    </li>
-  );
-}
 
-function BotsSidebar({ activeThreadId, onNavigate }: PluginThreadListProps) {
+function BotsSidebar(props: PluginThreadListProps) {
+  const { activeThreadId, onNavigate } = props;
   const sidebar = experimental_useSidebarThreads();
   const navigate = useBbNavigate();
   const portalScope = usePortalScopeProps();
@@ -592,8 +528,6 @@ function BotsSidebar({ activeThreadId, onNavigate }: PluginThreadListProps) {
   const { rpc, bots, hosts, sections, projects, threadBindings, warnings, personalProjectId, projectOwners, loaded, error, refresh } = useBotData();
   const [actionError, setActionError] = useState<string | null>(null);
   const [assigning, setAssigning] = useState<PluginSidebarThread | null>(null);
-  const [showOtherChats, setShowOtherChats] = useState(false);
-  const chatsOtherId = useId();
   const [editor, setEditor] = useState<EditorTarget | null>(null);
   const [showHidden, setShowHidden] = useState(false);
   const [addingSection, setAddingSection] = useState(false);
@@ -796,11 +730,6 @@ function BotsSidebar({ activeThreadId, onNavigate }: PluginThreadListProps) {
     else await openBotConversation(bot);
   }
 
-  const chatsTree = useMemo(() => conversationTree(
-    sidebar.threads.filter((thread) => !owners.has(thread.id)),
-    null, activeThreadId, 8,
-  ), [sidebar.threads, owners, activeThreadId]);
-  const renderChat = (thread: PluginSidebarThread) => <RecentRow key={thread.id} thread={thread} childrenByParent={chatsTree.childrenByParent} activePath={chatsTree.activePath} navigate={navigate} activeThreadId={activeThreadId} onNavigate={onNavigate} onAssign={setAssigning} onConversationDrag={(row, event) => { if (!owners.has(row.id) && !assignmentRequests.current.has(row.id)) conversationDrop.begin(row, event); }} draggingThreadId={conversationDrop.drag?.threadId ?? null} />;
   return (
     <TooltipProvider>
     <div ref={sidebarElement} className="bots-sidebar flex h-full min-h-0 flex-col overflow-hidden px-1.5 pb-1.5" data-conversation-dragging={Boolean(conversationDrop.drag)}>
@@ -867,10 +796,15 @@ function BotsSidebar({ activeThreadId, onNavigate }: PluginThreadListProps) {
         navigate.toCompose({ ...(personalProjectId ? { projectId: personalProjectId } : {}), focusPrompt: true });
         onNavigate();
       }}>
-        <ul>
-          {chatsTree.recent.map(renderChat)}
-          {chatsTree.other.length ? <li><button type="button" className="flex min-h-7 w-full items-center gap-1 rounded-md px-1 text-left text-[10px] text-muted-foreground hover:bg-state-hover" aria-expanded={showOtherChats} aria-controls={chatsOtherId} onClick={() => setShowOtherChats((current) => !current)}><span className={showOtherChats ? "rotate-90" : ""}><TinyIcon name="chevron" /></span>{chatsTree.other.length} Other</button><ul id={chatsOtherId} hidden={!showOtherChats}>{showOtherChats ? chatsTree.other.map(renderChat) : null}</ul></li> : null}
-        </ul>
+        <BotThreadListContext.Provider value={{
+          bindings: threadBindings,
+          onAssign: (threadId) => setAssigning(sidebar.threads.find(thread => thread.id === threadId) ?? null),
+          onAssignmentDrag: (row, event) => {
+            if (!owners.has(row.id) && !assignmentRequests.current.has(row.id)) conversationDrop.begin(row, event);
+          },
+        }}>
+          {loaded && !error ? <BuiltinThreadList {...props} /> : <p className="px-2 py-2 text-xs text-muted-foreground">Waiting for bot ownership…</p>}
+        </BotThreadListContext.Provider>
       </ResizableChats>
       {editingSection ? <RenameConversationDialog title={editingSection.name} heading="Rename section" description="Choose the section name shown in the sidebar." onClose={() => setEditingSection(null)} onSave={async (name) => {
         await rpc.call("section_update", { sectionId: editingSection.id, name }); refresh();
@@ -926,6 +860,7 @@ function BotsSidebar({ activeThreadId, onNavigate }: PluginThreadListProps) {
 }
 
 export default definePluginApp((app) => {
+  registerBuiltinThreadList(app);
   app.slots.experimental_threadList({
     id: "bot-projects",
     title: "Bots Sidebar",
