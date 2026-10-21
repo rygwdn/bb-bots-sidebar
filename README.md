@@ -311,9 +311,12 @@ remain enabled.
 
 `vendor/bb/manifest.json` pins the BB commit and SHA-256 of every imported file.
 `vendor/bb` is byte-exact upstream source, including its tests and license.
-Never edit it manually. Local behavior lives in `integration/`; the ignored
+Never edit it manually. Local behavior lives in `integration/`; the committed
 `.generated/bb` tree only reroutes imports to the SDK bridge and isolated shared
-UI. Keep that bridge small when upgrading rather than patching upstream rows.
+UI. BB Git installs disable npm lifecycle scripts, so this reproducible overlay
+must ship in Git. Regenerate it with `npm run prepare:thread-list` after every
+snapshot or generator change; never edit generated files. Keep the bridge small
+when upgrading rather than patching upstream rows.
 
 ```sh
 # Select a BB commit compatible with the installed host/SDK:
@@ -330,7 +333,7 @@ npm run build
 The updater replaces the managed snapshot, removes obsolete files, records the
 source commit, and refuses to overwrite hash drift. `vendor:check` also rejects
 missing and unexpected files. Fetching is explicit, never a build-time network
-dependency. Commit the snapshot, manifest, dependency/lockfile changes, and any
+dependency. Commit the snapshot, manifest, generated overlay, dependency/lockfile changes, and any
 necessary bridge adaptation together. Upstream tests run against the generated
 overlay without editing their source. New builtin action registrations require
 explicit review to avoid duplicating the bundled plugin's global actions.
