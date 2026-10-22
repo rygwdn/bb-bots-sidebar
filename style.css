@@ -165,6 +165,26 @@
 .bots-sidebar[data-conversation-dragging="true"] .project-row[data-conversation-drop="true"] .bot-subtitle {
   color: var(--foreground);
 }
+/* Regular HTML5 thread drags hovering a bot row (drop-to-assign). Same
+   visual language as the pointer gesture, keyed on the row itself because
+   the sidebar root has no dragging attribute during native drags. */
+.bots-sidebar .project-row[data-thread-drop-hover="true"] {
+  box-shadow: inset 0 0 0 1px var(--border);
+  background: var(--state-hover, var(--state-active));
+}
+.bots-sidebar .project-row[data-thread-drop-hover="true"] :is([data-bot-drop-first], [data-bot-drop-append])[data-drop-active="true"] {
+  border-radius: 0.375rem;
+  background: var(--state-active);
+}
+.bots-sidebar .project-row[data-thread-drop-hover="true"] [data-bot-drop-first][data-drop-active="true"] {
+  box-shadow: inset 0 0 0 1px var(--ring);
+}
+.bots-sidebar .project-row[data-thread-drop-hover="true"] [data-bot-drop-append][data-drop-active="true"] {
+  box-shadow: 4px 0 0 var(--state-active), -4px 0 0 var(--state-active);
+}
+.bots-sidebar .project-row[data-thread-drop-hover="true"] .bot-subtitle {
+  color: var(--foreground);
+}
 .bot-new-conversation { opacity: 0; pointer-events: none; }
 .project-row:hover > .bot-new-conversation,
 .project-row:has(:focus-visible) > .bot-new-conversation,

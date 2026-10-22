@@ -183,3 +183,51 @@ it("cleans up listeners and the ghost on unmount", async () => {
   expect(slot.inspection.rpcCalls.some(call => call.method === "conversation_assign")).toBe(false);
   expect(document.querySelector(".conversation-drag-ghost")).toBeNull();
 });
+
+// Regular HTML5 drags: dropping a native thread drag on a bot row assigns.
+// jsdom does not implement DragEvent (testing-library drops unknown init
+// fields such as clientY) and rects are all zeros, so dispatch manual
+// bubbling events: clientY 0 is inside the face (place first), anything
+// else is the append zone.
+const threadDrag = (threadId: string | null) => ({
+  types: threadId ? ["application/x-bb-thread-id"] : [],
+  getData: () => threadId ?? "",
+});
+function dragEvent(type: "dragstart" | "dragover" | "drop", threadId: string | null, clientY?: number) {
+  const event = new Event(type, { bubbles: true, cancelable: true });
+  Object.defineProperty(event, "dataTransfer", { value: threadDrag(threadId) });
+  if (clientY !== undefined) Object.defineProperty(event, "clientY", { value: clientY });
+  return event;
+}
+const dragOverRow = (target: HTMLElement, clientY: number) => { fireEvent(target.parentElement!, dragEvent("dragover", "chat", clientY)); };
+
+it("assigns on a regular drag drop and highlights the hovered bot", async () => {
+  const { slot, target } = await mount();
+  dragOverRow(target, 100);
+  expect(target.dataset.threadDropHover).toBe("true");
+  expect(target.textContent).toContain("Drop to add at end");
+  fireEvent(target.parentElement!, dragEvent("drop", "chat", 100));
+  expect(target.dataset.threadDropHover).toBe("false");
+  await waitFor(() => expect(slot.inspection.rpcCalls).toContainEqual({ method: "conversation_assign", input: { threadId: "chat", botId: "nova", placeFirst: false } }));
+  expect(slot.inspection.rpcCalls.some(call => call.method === "bots_reorder")).toBe(false);
+});
+
+it("a regular drag dropped on the bot's face promotes to first", async () => {
+  const { slot, target } = await mount();
+  dragOverRow(target, 0);
+  expect(target.textContent).toContain("Drop to make top conversation");
+  fireEvent(target.parentElement!, dragEvent("drop", "chat", 0));
+  await waitFor(() => expect(slot.inspection.rpcCalls).toContainEqual({ method: "conversation_assign", input: { threadId: "chat", botId: "nova", placeFirst: true } }));
+});
+
+it("ignores regular drops for owned threads, other payloads, and other rows", async () => {
+  const { slot, source, target } = await mount();
+  fireEvent(source, dragEvent("dragstart", "main-a"));
+  dragOverRow(target, 100);
+  expect(target.dataset.threadDropHover).toBe("false");
+  fireEvent(source, dragEvent("dragstart", "chat"));
+  fireEvent(source.parentElement!, dragEvent("dragover", null, 100));
+  expect(target.dataset.threadDropHover).toBe("false");
+  fireEvent.drop(source, { dataTransfer: threadDrag("chat") });
+  expect(slot.inspection.rpcCalls.some(call => call.method === "conversation_assign")).toBe(false);
+});

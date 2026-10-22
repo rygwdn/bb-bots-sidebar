@@ -32,8 +32,10 @@ The runtime plugin ID is `bots-sidebar`; its CLI is `bb bots`.
   and Undo. Unassigned Chats use a copied builtin thread list with its native
   layout, sections, and shared SDK extensions. Keep the bundled Thread list
   plugin enabled: its preferences and CLI remain authoritative.
-- Assign an unassigned conversation using **Assign to bot…**, or Alt-drag it
-  onto a bot. Ordinary drags keep native thread-list behavior.
+- Assign an unassigned conversation by dragging it onto a bot: dropping on
+  the bot's face makes it the top conversation, dropping on the row appends
+  it. Alt-drag (the pointer gesture) and **Assign to bot…** still work.
+  Ordinary drags elsewhere keep native thread-list behavior.
 - Edit bot has Bot, Context, and Projects tabs. Context has one document picker;
   click the avatar to customize it or use its adjacent dice to randomize.
   Saving is explicit. Per-bot AGENTS.md is retired; workspace AGENTS.md applies.
