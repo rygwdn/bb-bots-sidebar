@@ -21,6 +21,10 @@ The runtime plugin ID is `bots-sidebar`; its CLI is `bb bots`.
   bot state into a work project or treat private exports as editable files.
 - A project has at most one owner and may have many bot members. Ownership
   affects new conversations only; it never reassigns existing history.
+- The sidebar is one merged scroll list: the Bots group (with its sticky
+  header) is pinned at the top, and the Chats section — the copied builtin
+  thread list — flows below it in the same scroll. Chats can still be
+  collapsed via its header.
 - In the sidebar, a bot opens its first manually ordered conversation; its
   chevron expands all roots. Right-click for bot settings or a new project/
   worktree conversation. Worktree starts seed a fresh worktree in BB's composer.

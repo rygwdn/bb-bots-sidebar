@@ -42,7 +42,7 @@ import { BotActivityBadge } from "@/components/bot-activity-badge";
 import { ConversationArchiveButton } from "@/components/conversation-archive-button";
 import { BotNewConversationButton } from "@/components/bot-new-conversation-button";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
-import { ResizableChats } from "@/components/resizable-chats";
+import { ChatsSection } from "@/components/chats-section";
 import { ConversationDialog } from "@/components/conversation-dialog";
 import type { ConversationTarget } from "@/components/conversation-dialog";
 import { AssignConversationDialog } from "@/components/assign-conversation-dialog";
@@ -737,7 +737,7 @@ function BotsSidebar(props: PluginThreadListProps) {
         {sidebar.status === "loading" || !loaded ? <p className="px-2 py-4 text-sm text-muted-foreground">Loading bots…</p> : null}
         {sidebar.status === "error" || error || actionError ? <p role="alert" className="px-2 py-3 text-xs text-destructive">{actionError ?? error ?? "Could not load the sidebar."}</p> : null}
         {warnings.map((warning, index) => <p key={`${index}:${warning}`} role="status" className="px-2 py-1 text-xs text-muted-foreground">{warning}</p>)}
-        <div className="flex items-center justify-between px-1.5 pb-1">
+        <div className="bots-list-header sticky top-0 z-10 flex items-center justify-between px-1.5 pb-1">
           <span className="text-[10px] font-semibold uppercase tracking-[0.1em] text-muted-foreground">Bots</span>
           <DropdownMenu.Root><DropdownMenu.Trigger asChild><button type="button" className="flex size-5 items-center justify-center rounded text-muted-foreground hover:bg-state-hover" aria-label="Create…" title="Create…"><TinyIcon name="plus" /></button></DropdownMenu.Trigger><DropdownMenu.Portal><DropdownMenu.Content {...portalScope} align="end" sideOffset={4} aria-label="Create" className="z-50 min-w-36 rounded-md border border-border bg-popover p-1 text-popover-foreground shadow-md">
             <DropdownMenu.Item className={MENU_ITEM_CLASS} onSelect={() => { setAddingSection(false); setEditor({ kind: "create" }); }}>Bot</DropdownMenu.Item>
@@ -791,21 +791,21 @@ function BotsSidebar(props: PluginThreadListProps) {
         {hiddenBots.length ? <div className="bots-list-footer px-1.5 pt-2">
           <button type="button" className="h-5 rounded px-1.5 text-[9px] text-muted-foreground hover:bg-state-hover" aria-pressed={showHidden} onClick={() => setShowHidden((current) => !current)}>{hiddenBots.length} hidden</button>
         </div> : null}
-      </div>
-      <ResizableChats activeChatId={activeThreadId && !owners.has(activeThreadId) ? activeThreadId : null} onNewChat={() => {
-        navigate.toCompose({ ...(personalProjectId ? { projectId: personalProjectId } : {}), focusPrompt: true });
-        onNavigate();
-      }}>
-        <BotThreadListContext.Provider value={{
-          bindings: threadBindings,
-          onAssign: (threadId) => setAssigning(sidebar.threads.find(thread => thread.id === threadId) ?? null),
-          onAssignmentDrag: (row, event) => {
-            if (!owners.has(row.id) && !assignmentRequests.current.has(row.id)) conversationDrop.begin(row, event);
-          },
+        <ChatsSection activeChatId={activeThreadId && !owners.has(activeThreadId) ? activeThreadId : null} onNewChat={() => {
+          navigate.toCompose({ ...(personalProjectId ? { projectId: personalProjectId } : {}), focusPrompt: true });
+          onNavigate();
         }}>
-          {loaded && !error ? <BuiltinThreadList {...props} /> : <p className="px-2 py-2 text-xs text-muted-foreground">Waiting for bot ownership…</p>}
-        </BotThreadListContext.Provider>
-      </ResizableChats>
+          <BotThreadListContext.Provider value={{
+            bindings: threadBindings,
+            onAssign: (threadId) => setAssigning(sidebar.threads.find(thread => thread.id === threadId) ?? null),
+            onAssignmentDrag: (row, event) => {
+              if (!owners.has(row.id) && !assignmentRequests.current.has(row.id)) conversationDrop.begin(row, event);
+            },
+          }}>
+            {loaded && !error ? <BuiltinThreadList {...props} /> : <p className="px-2 py-2 text-xs text-muted-foreground">Waiting for bot ownership…</p>}
+          </BotThreadListContext.Provider>
+        </ChatsSection>
+      </div>
       {editingSection ? <RenameConversationDialog title={editingSection.name} heading="Rename section" description="Choose the section name shown in the sidebar." onClose={() => setEditingSection(null)} onSave={async (name) => {
         await rpc.call("section_update", { sectionId: editingSection.id, name }); refresh();
       }} /> : null}
