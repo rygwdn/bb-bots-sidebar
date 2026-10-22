@@ -1,6 +1,6 @@
 import { useId } from "react";
 import type { BotAvatar } from "../lib/appearance";
-import { eyeFitTransform, shapePath } from "../lib/appearance";
+import { eyeFitTransform, shapePath, speciesDetails, speciesParts } from "../lib/appearance";
 
 /** Existing curious/happy/focused/sleepy paths are unchanged; extra faces are small SVG stand-ins. */
 export function Eyes({ expression }: { expression: BotAvatar["expression"] }) {
@@ -153,6 +153,19 @@ export function BotIcon({
   const eyes = fit
     ? <g transform={fit}><Eyes expression={avatar.expression} /></g>
     : <Eyes expression={avatar.expression} />;
+  const parts = speciesParts(avatar.shape).map((part) => (
+    <path key={part.className + part.d.slice(0, 8)} className={part.className} d={part.d} fill={avatar.color} style={{ transformOrigin: part.transformOrigin }} />
+  ));
+  const details = speciesDetails(avatar.shape).map((detail, index) => (
+    <path
+      key={index}
+      d={detail.d}
+      fill={detail.fill ?? "none"}
+      stroke={detail.strokeWidth ? "#000" : "none"}
+      strokeWidth={detail.strokeWidth ?? 0}
+      strokeLinecap="round"
+    />
+  ));
   return (
     <svg
       className={`bot-avatar bot-motion-${avatar.motion} ${working ? "bot-state-working" : `bot-state-idle bot-idle-${idleVariant % 3}`}`}
@@ -170,16 +183,20 @@ export function BotIcon({
       <circle className="bot-work-ring" cx="50" cy="50" r="47" fill="none" stroke={avatar.color} strokeWidth="2.5" />
       {selected ? (
         <>
+          {parts}
           <path d={path} fill={avatar.color} stroke="#0a0a0c" strokeWidth="3.5" strokeLinejoin="round" />
           {eyes}
+          {details}
         </>
       ) : (
         <>
+          {parts}
           <mask id={`bot-eyes-${id}`} maskUnits="userSpaceOnUse" x="0" y="0" width="100" height="100">
             <path d={path} fill="#fff" />
             {eyes}
           </mask>
           <path d={path} fill={avatar.color} mask={`url(#bot-eyes-${id})`} />
+          {details}
         </>
       )}
     </svg>

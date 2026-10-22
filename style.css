@@ -304,6 +304,21 @@
 .bot-idle-1 .bot-eyes { animation-delay: -7.1s !important; }
 .bot-idle-2 { animation-delay: -8.6s !important; }
 .bot-idle-2 .bot-eyes { animation-delay: -2.4s !important; }
+/* Species parts (cat tail, griffon wings) flick/flutter whenever the bot is animating. */
+.bot-avatar:not(.bot-motion-still) .bot-part-tail,
+.bot-avatar:not(.bot-motion-still) .bot-part-wings {
+  transform-box: view-box;
+  animation: bot-species-part 9s ease-in-out infinite;
+}
+.bot-idle-1 .bot-part-tail, .bot-idle-1 .bot-part-wings { animation-delay: -3.1s !important; }
+.bot-idle-2 .bot-part-tail, .bot-idle-2 .bot-part-wings { animation-delay: -6.2s !important; }
+.bot-state-working .bot-part-tail, .bot-state-working .bot-part-wings { animation-duration: 3.5s; }
+@keyframes bot-species-part {
+  0%, 55%, 100% { transform: rotate(0deg); }
+  62% { transform: rotate(-9deg); }
+  74% { transform: rotate(6deg); }
+  86% { transform: rotate(-2deg); }
+}
 @keyframes bot-working-bob {
   0%, 100% { transform: translateY(1px) rotate(-2deg) scale(.98, 1.02); }
   50% { transform: translateY(-1.5px) rotate(2deg) scale(1.03, .97); }

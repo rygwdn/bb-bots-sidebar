@@ -3,6 +3,7 @@ import { expect, it } from "vitest";
 import { avatarSchema } from "../contract";
 import {
   AVATAR_COLORS,
+  eyeFitTransform,
   AVATAR_EXPRESSION_IDS,
   AVATAR_MOTION_IDS,
   AVATAR_SHAPE_IDS,
@@ -10,10 +11,12 @@ import {
   paletteColorForSeed,
   randomAvatar,
   shapePath,
+  speciesDetails,
+  speciesParts,
 } from "../lib/appearance";
 
-it("exposes 8 shapes, 16 expressions, 3 motions, and 14 chromatic colors", () => {
-  expect(AVATAR_SHAPE_IDS).toHaveLength(8);
+it("exposes 10 shapes, 16 expressions, 3 motions, and 14 chromatic colors", () => {
+  expect(AVATAR_SHAPE_IDS).toHaveLength(10);
   expect(AVATAR_EXPRESSION_IDS).toHaveLength(16);
   expect(AVATAR_MOTION_IDS).toEqual(["calm", "playful", "still"]);
   expect(AVATAR_COLORS).toHaveLength(14);
@@ -44,7 +47,21 @@ it("preserves the original three shape paths", () => {
 
 it("gives every new shape a distinct path", () => {
   const paths = AVATAR_SHAPE_IDS.map((shape) => shapePath(shape));
-  expect(new Set(paths).size).toBe(8);
+  expect(new Set(paths).size).toBe(10);
+});
+
+it("gives the species shapes eye-fit transforms plus animatable parts and face details", () => {
+  for (const shape of ["griffon", "cat"] as const) {
+    expect(eyeFitTransform(shape)).toMatch(/translate\(/);
+    expect(speciesParts(shape).length).toBeGreaterThan(0);
+    expect(speciesDetails(shape).length).toBeGreaterThan(0);
+    for (const part of speciesParts(shape)) {
+      expect(part.className).toMatch(/^bot-part-/);
+      expect(part.transformOrigin).toMatch(/px/);
+    }
+  }
+  expect(speciesParts("round")).toEqual([]);
+  expect(speciesDetails("round")).toEqual([]);
 });
 
 it("keeps the droplet bulb inside y<=96", () => {
@@ -83,7 +100,7 @@ it("randomizes all four fields from the option lists and never rolls a neutral p
     motions.add(avatar.motion);
     colors.add(avatar.color);
   }
-  expect(shapes.size).toBe(8);
+  expect(shapes.size).toBe(10);
   expect(expressions.size).toBe(16);
   expect(motions.size).toBe(3);
   expect(colors.size).toBe(14);

@@ -4,7 +4,7 @@
  * without pulling the contract schema.
  */
 
-export const AVATAR_SHAPE_IDS = ["round", "blob", "squircle", "capsule", "triangle", "hexagon", "cloud", "droplet"] as const;
+export const AVATAR_SHAPE_IDS = ["round", "blob", "squircle", "capsule", "triangle", "hexagon", "cloud", "droplet", "griffon", "cat"] as const;
 export const AVATAR_EXPRESSION_IDS = [
   "curious", "happy", "focused", "sleepy",
   "neutral", "surprised", "excited", "laughing", "angry", "sad", "scared",
@@ -45,6 +45,8 @@ export const AVATAR_SHAPES: Array<{ id: (typeof AVATAR_SHAPE_IDS)[number]; label
   { id: "hexagon", label: "Hexagon" },
   { id: "cloud", label: "Cloud" },
   { id: "droplet", label: "Droplet" },
+  { id: "griffon", label: "Baby griffon" },
+  { id: "cat", label: "Cat" },
 ];
 
 export const AVATAR_EXPRESSIONS: Array<{ id: (typeof AVATAR_EXPRESSION_IDS)[number]; label: string }> = [
@@ -96,7 +98,41 @@ export function shapePath(shape: BotAvatar["shape"]): string {
     return "M18 58C10 58 8 46 18 42C16 28 32 22 42 30C48 16 72 16 80 30C94 28 98 46 88 52C96 62 88 74 74 70C66 80 38 80 28 68C16 72 12 64 18 58Z";
   }
   if (shape === "droplet") return "M50 8C76 32 80 48 80 66A30 30 0 1 1 20 66C20 48 24 32 50 8Z";
+  if (shape === "griffon") {
+    return "M50 17A40 40 0 1 1 49.99 17ZM36 24L26 8C25 6 27 5 29 6L45 16ZM64 24L55 16L71 6C73 5 75 6 74 8C74 13 70 19 64 24Z";
+  }
+  if (shape === "cat") return "M50 18A40 40 0 1 1 49.99 18ZM31 24L22 3L43 15ZM69 24L78 3L57 15Z";
   return ROUND_PATH;
+}
+
+/** Extra same-color silhouette parts (wings, tail) drawn behind the body so species idle animations can move them. */
+export type SpeciesPart = { className: string; d: string; transformOrigin: string };
+
+export function speciesParts(shape: BotAvatar["shape"]): SpeciesPart[] {
+  if (shape === "griffon") {
+    return [
+      { className: "bot-part-wings", d: "M14 56C4 53 0 62 4 71C8 78 19 76 22 66Z", transformOrigin: "16px 58px" },
+      { className: "bot-part-wings", d: "M86 56C96 53 100 62 96 71C92 78 81 76 78 66Z", transformOrigin: "84px 58px" },
+    ];
+  }
+  if (shape === "cat") {
+    return [{ className: "bot-part-tail", d: "M80 93C95 94 102 82 98 68C97 61 90 59 89 65C92 73 88 84 78 88Z", transformOrigin: "82px 91px" }];
+  }
+  return [];
+}
+
+/** Tiny black marks drawn on top of the face (beak, whiskers) that finish a species look. */
+export type SpeciesDetail = { d: string; fill?: string; strokeWidth?: number };
+
+export function speciesDetails(shape: BotAvatar["shape"]): SpeciesDetail[] {
+  if (shape === "griffon") return [{ d: "M47 48C47 46 53 46 53 48L51.5 56C51 58 49 58 48.5 56Z", fill: "#000" }];
+  if (shape === "cat") {
+    return [
+      { d: "M47 51L53 51L50 57Z", fill: "#000" },
+      { d: "M18 54L6 50M18 61L6 63M82 54L94 50M82 61L94 63", strokeWidth: 2 },
+    ];
+  }
+  return [];
 }
 
 /** Keep eyes inside pointed/wide silhouettes; identity for the original three shapes. */
@@ -106,6 +142,8 @@ export function eyeFitTransform(shape: BotAvatar["shape"]): string | undefined {
   if (shape === "hexagon") return "translate(50 50) scale(0.84) translate(-50 -50)";
   if (shape === "cloud") return "translate(50 56) scale(0.76) translate(-50 -45)";
   if (shape === "droplet") return "translate(50 60) scale(0.7) translate(-50 -45)";
+  if (shape === "griffon") return "translate(50 52) scale(0.95) translate(-50 -45)";
+  if (shape === "cat") return "translate(50 54) scale(0.95) translate(-50 -45)";
   return undefined;
 }
 

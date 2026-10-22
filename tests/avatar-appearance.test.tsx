@@ -62,7 +62,8 @@ it("renders every shape and expression as SVG", () => {
     const { container, unmount } = render(<BotIcon avatar={{ ...base, shape: shape.id }} size={40} label={shape.label} />);
     const svg = container.querySelector("svg.bot-avatar")!;
     expect(svg.getAttribute("data-shape")).toBe(shape.id);
-    expect(svg.querySelector("path")?.getAttribute("d")).toBe(shapePath(shape.id));
+    const bodyPath = [...svg.querySelectorAll("path")].some((path) => path.getAttribute("d") === shapePath(shape.id));
+    expect(bodyPath).toBe(true);
     expect(svg.querySelector(".bot-eyes")).toBeTruthy();
     unmount();
   }
@@ -97,7 +98,7 @@ it("offers compact category choosers instead of a 16-row expression list", () =>
   expect(queryByRole("group", { name: "Shape" })).toBeNull();
   fireEvent.click(getByRole("button", { name: "Shape" }));
   const shapes = getByRole("group", { name: "Shape" });
-  expect(shapes.querySelectorAll("button")).toHaveLength(8);
+  expect(shapes.querySelectorAll("button")).toHaveLength(10);
   for (const svg of Array.from(shapes.querySelectorAll("svg"))) expect(svg.getAttribute("data-motion")).toBe("still");
   fireEvent.click(getByRole("button", { name: "Color" }));
   for (const color of AVATAR_COLORS) expect(getByRole("button", { name: color })).toBeTruthy();
