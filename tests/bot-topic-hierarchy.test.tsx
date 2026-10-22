@@ -77,23 +77,34 @@ it("double-clicking the bot toggles the list once, without duplicate navigation"
   expect(toggle().getAttribute("aria-expanded")).toBe("false");
 });
 
-it.each(["before", "after", "nest", "escape", "outside", "touch", "blur", "unmount", "failure"])("pointer drag supports %s without stealing split gestures or clicks", async mode => {
+it.each(["before", "after", "nest", "escape", "outside", "touch-hold", "touch-scroll", "blur", "unmount", "failure"])("pointer drag supports %s without stealing split gestures or clicks", async mode => {
   const { slot, toggle } = await mount(mode === "failure"); fireEvent.click(toggle());
   const source = slot.container.querySelector<HTMLElement>('[data-sidebar-thread-id="last"]')!;
   const target = slot.container.querySelector<HTMLElement>('[data-sidebar-thread-id="first"]')!;
   vi.spyOn(target.closest(".thread-row")!, "getBoundingClientRect").mockReturnValue({ top: 80, height: 40 } as DOMRect);
-  fireEvent.pointerDown(source, { button: 0, buttons: 1, pointerId: 1, pointerType: mode === "touch" ? "touch" : "mouse", clientX: 40, clientY: 300 });
-  hit = mode === "outside" ? document.body : target;
+  const touch = mode.startsWith("touch");
+  // The long-press hold must be scheduled on fake timers to advance it.
+  if (touch) vi.useFakeTimers();
+  fireEvent.pointerDown(source, { button: 0, buttons: 1, pointerId: 1, pointerType: touch ? "touch" : "mouse", clientX: 40, clientY: 300 });
+  if (mode === "touch-hold") { vi.advanceTimersByTime(400); hit = target; }
+  hit = mode === "outside" ? document.body : mode === "touch-scroll" ? null : hit ?? target;
   const clientY = mode === "after" ? 110 : 90;
   const shiftKey = mode === "nest";
-  fireEvent.pointerMove(window, { buttons: 1, pointerId: 1, clientX: 40, clientY, shiftKey });
-  if (["before", "after", "nest", "failure"].includes(mode)) expect(target.closest("li")?.dataset.dropPosition).toBe(shiftKey ? "inside" : mode === "after" ? "after" : "before");
+  if (mode === "touch-scroll") {
+    // Moving before the hold fires cancels it (this is ordinary scrolling).
+    fireEvent.pointerMove(window, { buttons: 1, pointerId: 1, clientX: 40, clientY: 380, shiftKey });
+    vi.useRealTimers();
+  } else {
+    fireEvent.pointerMove(window, { buttons: 1, pointerId: 1, clientX: 40, clientY, shiftKey });
+    if (touch) vi.useRealTimers();
+  }
+  if (["before", "after", "nest", "failure", "touch-hold"].includes(mode)) expect(target.closest("li")?.dataset.dropPosition).toBe(shiftKey ? "inside" : mode === "after" ? "after" : "before");
   if (mode === "escape") fireEvent.keyDown(document, { key: "Escape" });
   if (mode === "blur") fireEvent(window, new Event("blur"));
   if (mode === "unmount") slot.lifecycle.unmount();
   fireEvent.pointerUp(window, { pointerId: 1, clientX: 40, clientY, shiftKey });
   if (["before", "after", "nest", "escape", "outside"].includes(mode)) fireEvent.click(target);
-  if (["before", "after", "failure"].includes(mode)) {
+  if (["before", "after", "failure", "touch-hold"].includes(mode)) {
     await waitFor(() => expect(slot.inspection.rpcCalls).toContainEqual({ method: "conversation_reorder", input: { botId: bot.id, threadId: "last", targetThreadId: "first", position: mode === "after" ? "after" : "before" } }));
   } else if (mode === "nest") {
     await waitFor(() => expect(slot.inspection.rpcCalls).toContainEqual({ method: "conversation_nest", input: { threadId: "last", parentThreadId: "first" } }));

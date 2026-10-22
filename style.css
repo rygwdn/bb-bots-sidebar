@@ -136,8 +136,15 @@
   height: 0.8rem;
 }
 .bot-topics { margin: 0.125rem 0.25rem 0.25rem 0.875rem; }
-.thread-row { position: relative; user-select: none; }
+.thread-row { position: relative; user-select: none; -webkit-touch-callout: none; }
 .recent-row { user-select: none; }
+/* Touch drags engage by long-press; keep iOS from showing the text loupe
+   or callout instead of picking the row up. */
+.project-row {
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+  user-select: none;
+}
 .recent-row[data-conversation-dragging="true"] { opacity: 0.45; }
 .bots-sidebar[data-conversation-dragging="true"] :is(a, button, .project-row) { cursor: grabbing; }
 .bots-sidebar[data-conversation-dragging="true"] .project-row[data-conversation-drop="true"] {

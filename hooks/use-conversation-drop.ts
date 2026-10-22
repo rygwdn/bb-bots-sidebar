@@ -38,16 +38,29 @@ export function useConversationDrop(onDrop: (thread: PluginSidebarThread, botId:
   useEffect(moveGhost, [drag]);
 
   function begin(thread: PluginSidebarThread, event: ReactPointerEvent<HTMLElement>) {
-    if (event.button !== 0 || event.pointerType === "touch") return;
+    if (event.button !== 0) return;
     const sidebar = event.currentTarget.closest(".bots-sidebar");
     if (!sidebar) return;
     cancel.current?.(); releaseCleanup.current?.();
+    // Touch engages by long-press instead of a movement threshold so ordinary
+    // scrolling keeps working; while engaged, touchmove is blocked.
+    const touch = event.pointerType === "touch";
     const start = { x: event.clientX, y: event.clientY, pointerId: event.pointerId };
     let engaged = false;
+    let holdTimer: ReturnType<typeof setTimeout> | null = null;
     let targetId: string | null = null;
     let ended = false;
     let shiftKey = event.shiftKey;
     const title = thread.title ?? thread.titleFallback ?? "Untitled conversation";
+    function blockScroll(move: TouchEvent) { if (engaged) move.preventDefault(); }
+    function engage() {
+      if (engaged || ended) return;
+      engaged = true;
+      holdTimer = null;
+      position.current = { x: start.x, y: start.y };
+      targetId = targetAt(start.x, start.y, shiftKey);
+      setDrag({ threadId: thread.id, title, botId: targetId, shiftKey });
+    }
     function targetAt(x: number, y: number, shiftKey = false) {
       const element = document.elementFromPoint(x, y);
       if (!element || !sidebar!.contains(element)) return null;
@@ -58,10 +71,12 @@ export function useConversationDrop(onDrop: (thread: PluginSidebarThread, botId:
     }
     function cleanup() {
       if (ended) return; ended = true;
+      if (holdTimer) { clearTimeout(holdTimer); holdTimer = null; }
       window.removeEventListener("pointermove", move);
       window.removeEventListener("pointerup", up);
       window.removeEventListener("pointercancel", cancelled);
       window.removeEventListener("blur", cancelled);
+      window.removeEventListener("touchmove", blockScroll);
       document.removeEventListener("keydown", key);
       document.removeEventListener("keyup", key);
       cancel.current = null; setDrag(null);
@@ -78,7 +93,15 @@ export function useConversationDrop(onDrop: (thread: PluginSidebarThread, botId:
     function move(event: PointerEvent) {
       if (ended || event.pointerId !== start.pointerId) return;
       if (!(event.buttons & 1)) { cancelled(); return; }
-      if (!engaged && Math.hypot(event.clientX - start.x, event.clientY - start.y) < 6) return;
+      if (!engaged) {
+        const distance = Math.hypot(event.clientX - start.x, event.clientY - start.y);
+        if (touch) {
+          // Scrolling: cancel the pending hold instead of starting a drag.
+          if (distance > 8 && holdTimer) { clearTimeout(holdTimer); holdTimer = null; }
+          return;
+        }
+        if (distance < 6) return;
+      }
       const first = !engaged; engaged = true;
       event.preventDefault(); position.current = { x: event.clientX, y: event.clientY }; moveGhost();
       const next = targetAt(event.clientX, event.clientY, event.shiftKey);
@@ -93,6 +116,10 @@ export function useConversationDrop(onDrop: (thread: PluginSidebarThread, botId:
       if (dropped) callbacks.current.onDrop(thread, dropped, event.shiftKey);
     }
     cancel.current = cancelled;
+    if (touch) {
+      holdTimer = setTimeout(engage, 350);
+      window.addEventListener("touchmove", blockScroll, { passive: false });
+    }
     window.addEventListener("pointermove", move, { passive: false });
     window.addEventListener("pointerup", up);
     window.addEventListener("pointercancel", cancelled);
