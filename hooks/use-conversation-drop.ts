@@ -112,7 +112,14 @@ export function useConversationDrop(onDrop: (thread: PluginSidebarThread, botId:
       // If a live update moved another bot under the pointer, require a new
       // hover/highlight rather than assigning to an unseen replacement target.
       const dropped = engaged && targetId && targetAt(event.clientX, event.clientY, event.shiftKey) === targetId ? targetId : null;
+      // A long-press that never became a drag was a context-menu request, not
+      // a drag pick-up: hand off to the row's context menu at the touch point.
+      const stationary = engaged && Math.hypot(event.clientX - start.x, event.clientY - start.y) <= 8;
       if (engaged) swallowClick(); cleanup();
+      if (stationary) {
+        document.elementFromPoint(event.clientX, event.clientY)?.dispatchEvent(new MouseEvent("contextmenu", { bubbles: true, cancelable: true, clientX: event.clientX, clientY: event.clientY }));
+        return;
+      }
       if (dropped) callbacks.current.onDrop(thread, dropped, event.shiftKey);
     }
     cancel.current = cancelled;

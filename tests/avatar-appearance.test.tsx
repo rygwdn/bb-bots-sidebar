@@ -62,7 +62,7 @@ it("renders every shape and expression as SVG", () => {
     const { container, unmount } = render(<BotIcon avatar={{ ...base, shape: shape.id }} size={40} label={shape.label} />);
     const svg = container.querySelector("svg.bot-avatar")!;
     expect(svg.getAttribute("data-shape")).toBe(shape.id);
-    const bodyPath = [...svg.querySelectorAll("path")].some((path) => path.getAttribute("d") === shapePath(shape.id));
+    const bodyPath = Array.from(svg.querySelectorAll("path")).some((path) => path.getAttribute("d") === shapePath(shape.id));
     expect(bodyPath).toBe(true);
     expect(svg.querySelector(".bot-eyes")).toBeTruthy();
     unmount();
