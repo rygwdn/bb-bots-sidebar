@@ -111,12 +111,12 @@ export type SpeciesPart = { className: string; d: string; transformOrigin: strin
 export function speciesParts(shape: BotAvatar["shape"]): SpeciesPart[] {
   if (shape === "griffon") {
     return [
-      { className: "bot-part-wings", d: "M14 56C4 53 0 62 4 71C8 78 19 76 22 66Z", transformOrigin: "16px 58px" },
-      { className: "bot-part-wings", d: "M86 56C96 53 100 62 96 71C92 78 81 76 78 66Z", transformOrigin: "84px 58px" },
+      { className: "bot-part-wings", d: "M16 54C4 50 0 60 4 71C9 78 20 75 23 64Z", transformOrigin: "17px 57px" },
+      { className: "bot-part-wings", d: "M84 54C96 50 100 60 96 71C91 78 80 75 77 64Z", transformOrigin: "83px 57px" },
     ];
   }
   if (shape === "cat") {
-    return [{ className: "bot-part-tail", d: "M80 93C95 94 102 82 98 68C97 61 90 59 89 65C92 73 88 84 78 88Z", transformOrigin: "82px 91px" }];
+    return [{ className: "bot-part-tail", d: "M76 92C92 96 100 86 97 70C96 64 90 63 90 68C91 76 88 84 72 88Z", transformOrigin: "78px 90px" }];
   }
   return [];
 }
