@@ -871,7 +871,7 @@ function BotsSidebar(props: PluginThreadListProps) {
       {assigning ? <AssignConversationDialog bots={bots} title={assigning.title ?? assigning.titleFallback ?? "Untitled conversation"} onClose={() => setAssigning(null)} onAssign={async (botId) => {
         await assignConversation(assigning, botId);
       }} /> : null}
-      {conversation ? <ConversationDialog target={conversation} onClose={() => setConversation(null)} onCreate={async (request) => {
+      {conversation ? <ConversationDialog target={conversation} onClose={() => setConversation(null)} onCreate={async (request, continuityEnabled) => {
         const bot = bots.find((bot) => bot.id === conversation.bot.id);
         if (!bot) throw new Error("This bot is no longer available.");
         if (!allowsConversationProject(request.projectId, bot, personalProjectId, projects)) {
@@ -879,7 +879,7 @@ function BotsSidebar(props: PluginThreadListProps) {
         }
         const { threadId } = conversation.kind === "fork"
           ? await rpc.call("conversation_fork", { botId: bot.id, sourceThreadId: conversation.sourceThreadId!, request })
-          : await rpc.call("conversation_create", { botId: bot.id, request, makeMain: conversation.makeMain });
+          : await rpc.call("conversation_create", { botId: bot.id, request, makeMain: conversation.makeMain, ...(continuityEnabled ? { continuityEnabled: true } : {}) });
         setConversation(null); refresh();
         navigate.toThread(threadId);
         onNavigate();

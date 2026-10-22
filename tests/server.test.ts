@@ -53,6 +53,29 @@ describe("private bot identities", () => {
     });
     expect(host.harness.inspection.sdk.callsTo("threads.spawn")[0]?.[0]).toMatchObject({ sessionOptions });
   });
+
+  it("rejects first dispatch if Continuity fails and retains its start token for a safe retry", async () => {
+    const host = await setup(); const bot = await host.create();
+    const token = "12345678-1234-1234-1234-123456789abc";
+    host.store.stageStart(token, bot.id, PERSONAL_ID, true);
+    const thread = makeThreadResponse({ id: "continuity-thread", projectId: PERSONAL_ID, providerId: "acp-omp", originPluginId: host.bb.pluginId });
+    const context = makeMessageDispatchHookContext({ thread, input: { blocks: [{ type: "text", text: `[bb-bot-start:${token}]`, mentions: [], visibility: "agent-only" }], text: "" } });
+    const dispatch = host.harness.inspection.registrations.hooks["message.dispatch"]!;
+    host.harness.sdk.stub("plugins.callRpc", async () => { throw new Error("Continuity unavailable"); });
+    expect(await dispatch(context)).toEqual({ action: "reject", message: "Continuity could not be enabled: Continuity unavailable" });
+    expect(host.store.pendingStart(token)).toBe(bot.id);
+    expect(host.store.owner(thread.id)).toBeNull();
+    host.harness.sdk.stub("plugins.callRpc", async () => ({ enabled: true }));
+    expect(await dispatch(context)).toEqual({ action: "proceed" });
+    expect(host.store.pendingStart(token)).toBeNull();
+    expect(host.store.owner(thread.id)).toBe(bot.id);
+  });
+
+  it("refuses Continuity on another provider before creating any conversation", async () => {
+    const host = await setup(); const bot = await host.create();
+    await expect(host.harness.behavior.callRpc("conversation_create", { botId: bot.id, request: request(PERSONAL_ID), continuityEnabled: true })).rejects.toThrow("OMP");
+    expect(host.threads.size).toBe(0);
+  });
   it.each([
     { type: "existing", hostId: "host-gb300" },
     { type: "new", machineProviderId: "test-machines", inputs: { size: "gpu", options: [true, null, 2] } },

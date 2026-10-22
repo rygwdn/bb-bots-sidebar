@@ -12,6 +12,7 @@ export function createBotStore(bb: BbPluginApi) {
     "CREATE TABLE bot_project_owners (project_id TEXT PRIMARY KEY, bot_id TEXT NOT NULL REFERENCES bots(id) ON DELETE CASCADE, assigned_at INTEGER NOT NULL)",
     "CREATE INDEX bot_project_owners_by_bot ON bot_project_owners(bot_id)",
     "ALTER TABLE bot_starts ADD COLUMN project_id TEXT",
+    "ALTER TABLE bot_starts ADD COLUMN continuity_enabled INTEGER NOT NULL DEFAULT 0",
   ]);
   const legacySchema = metadataSchema.omit({ stateReady: true, legacyHomeProjectId: true }).extend({ homePath: z.string(), homeProjectId: z.string().nullable() }).strict();
   const raw = (id: string) => db.prepare("SELECT data FROM bots WHERE id = ?").get(id) as { data: string } | undefined;
@@ -148,8 +149,8 @@ export function createBotStore(bb: BbPluginApi) {
     bindings(): { threadId: string; botId: string }[] { return db.prepare("SELECT thread_id AS threadId, bot_id AS botId FROM bot_threads ORDER BY thread_id").all() as { threadId: string; botId: string }[]; },
     sections(): BotSection[] { return (state<unknown[]>("sections") ?? []).map((value) => sectionSchema.parse(value)).sort((a, b) => a.order - b.order); },
     saveSections(sections: BotSection[]) { setState("sections", sections.map((value) => sectionSchema.parse(value))); },
-    stageStart(token: string, botId: string, projectId: string) { db.prepare("INSERT INTO bot_starts(token,bot_id,created_at,project_id) VALUES (?,?,?,?)").run(token, botId, Date.now(), projectId); },
-    pendingStartContext(token: string): { botId: string; projectId: string | null } | null { return db.prepare("SELECT bot_id AS botId, project_id AS projectId FROM bot_starts WHERE token = ?").get(token) as { botId: string; projectId: string | null } | undefined ?? null; },
+    stageStart(token: string, botId: string, projectId: string, continuityEnabled = false) { db.prepare("INSERT INTO bot_starts(token,bot_id,created_at,project_id,continuity_enabled) VALUES (?,?,?,?,?)").run(token, botId, Date.now(), projectId, Number(continuityEnabled)); },
+    pendingStartContext(token: string): { botId: string; projectId: string | null; continuityEnabled: number } | null { return db.prepare("SELECT bot_id AS botId, project_id AS projectId, continuity_enabled AS continuityEnabled FROM bot_starts WHERE token = ?").get(token) as { botId: string; projectId: string | null; continuityEnabled: number } | undefined ?? null; },
     pendingStart(token: string): string | null { return (db.prepare("SELECT bot_id FROM bot_starts WHERE token = ?").get(token) as { bot_id: string } | undefined)?.bot_id ?? null; },
     finishStart(token: string, threadId: string) { db.transaction(() => { const botId = this.pendingStart(token); if (!botId) throw new Error("Unknown bot conversation start"); bind(threadId, botId); db.prepare("DELETE FROM bot_starts WHERE token = ?").run(token); })(); },
     cancelStart(token: string) { db.prepare("DELETE FROM bot_starts WHERE token = ?").run(token); },

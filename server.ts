@@ -1,6 +1,6 @@
 import { createHash, randomUUID } from "node:crypto";
 import type { BbPluginApi, PluginAgentConfigurationContext } from "@get-bb/plugin-sdk";
-import type { z } from "zod";
+import { z } from "zod";
 import { rpcContract, stateReadSchema, stateMutationSchema, stateMutationToolSchema, stateMutationResultSchema, normalizeStateMutation, type BotMetadata, type BotStateMutation } from "./contract";
 import { createBotStore, EMPTY_HASHES, nextTimestamp } from "./lib/bot-store";
 import { applyState, BotStateConflictError, createPrivateBotState, stateContent } from "./lib/private-state";
@@ -248,6 +248,17 @@ export default async function plugin(bb: BbPluginApi) {
       if (!start) continue;
       if (start.projectId === null) await validateConversationProject(store.require(start.botId), ctx.thread.projectId);
       else if (start.projectId !== ctx.thread.projectId) throw new Error("Bot conversation start belongs to a different project");
+      if (start.continuityEnabled) {
+        try {
+          await bb.sdk.plugins.callRpc({
+            pluginId: "continuity", method: "setEnabled",
+            input: { threadId: ctx.thread.id, enabled: true },
+            outputSchema: z.object({ enabled: z.literal(true) }),
+          });
+        } catch (error) {
+          return { action: "reject", message: `Continuity could not be enabled: ${error instanceof Error ? error.message : String(error)}` };
+        }
+      }
       store.finishStart(token, ctx.thread.id); publish(); return { action: "proceed" };
     }
     await routeNewThread(ctx.thread, false);
@@ -312,12 +323,14 @@ export default async function plugin(bb: BbPluginApi) {
       const latest = store.require(botId);
       const next = store.save({ ...latest, mainThreadId: threadId, updatedAt: nextTimestamp(latest.updatedAt) }); publish(); return next;
     }),
-    conversation_create: async ({ botId, request, makeMain }) => {
+    conversation_create: async ({ botId, request, makeMain, continuityEnabled = false }) => {
+      if (continuityEnabled && request.providerId !== "acp-omp") throw new Error("Continuity supports only OMP. Choose OMP or turn off Enable Continuity.");
+      if (continuityEnabled && !(await bb.sdk.plugins.list()).plugins.some(plugin => plugin.id === "continuity" && plugin.status === "running")) throw new Error("Enable the Continuity plugin before starting a conversation with Continuity.");
       if (request.projectId !== await personalProjectId()) await updateProjectRole(botId, "join", request.projectId);
       return serial(botId, async () => {
         const bot = await state.prepare(botId);
         await validateConversationProject(bot, request.projectId);
-        const token = randomUUID(); store.stageStart(token, botId, request.projectId);
+        const token = randomUUID(); store.stageStart(token, botId, request.projectId, continuityEnabled);
         const thread = await bb.sdk.threads.spawn({ ...request, input: [...request.input, { type: "text", text: `[bb-bot-start:${token}]\nThis conversation belongs to bot ${bot.name}. Its identity and memory are embedded and managed by bot_read_state / bot_update_state, not files in the working directory.`, mentions: [], visibility: "agent-only" }] });
         store.bind(thread.id, botId); store.cancelStart(token);
         if (makeMain || !store.require(botId).mainThreadId) { const latest = store.require(botId); store.save({ ...latest, mainThreadId: thread.id, updatedAt: nextTimestamp(latest.updatedAt) }); }

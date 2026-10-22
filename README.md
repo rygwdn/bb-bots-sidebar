@@ -239,6 +239,13 @@ in bot state.
   selects a fresh worktree. For explicit project/worktree actions, the current
   work context or a linked project is preselected, and you can change
   the project, machine, and harness inside the popup before sending.
+- The new-conversation popup includes **Enable Continuity** (off by default).
+  It requires OMP and the enabled Continuity plugin. Opt-in is saved before the
+  first message is admitted, so the provider loads it on its initial start.
+  Other harnesses report an error rather than silently ignoring the selection.
+  Forks retain their existing flow and do not offer this new-thread option.
+  On mobile, the drawer follows the visible viewport above the keyboard and
+  keeps its controls scrollable.
 - **New conversation in worktree…** selects a fresh managed worktree on the
   originating conversation's machine (or the bot's first-conversation/default machine), never
   reuses the existing worktree. The picker remains editable; if that machine lacks

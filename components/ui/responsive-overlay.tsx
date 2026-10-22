@@ -26,6 +26,7 @@ function resetDrawerKeyboardStyles(drawerElement: HTMLElement | null): void {
 
   drawerElement.style.height = "";
   drawerElement.style.bottom = "";
+  drawerElement.style.maxHeight = "";
 }
 
 export function useResponsiveRoot(
@@ -537,6 +538,43 @@ export function PersistentResponsiveDrawerShell({
     blurActiveKeyboardInputWithin(panelRef.current);
     resetDrawerKeyboardStyles(panelRef.current);
   }, []);
+
+  React.useLayoutEffect(() => {
+    const panel = panelRef.current;
+    const viewport = window.visualViewport;
+    if (!open || panel === null || !viewport) return;
+
+    let frame: number | null = null;
+    const update = () => {
+      frame = null;
+      // Mobile keyboards can shrink/pan only the visual viewport. Fixed
+      // positioning and dvh alone still refer to the layout viewport on iOS.
+      panel.style.bottom = `${Math.max(0, window.innerHeight - viewport.offsetTop - viewport.height)}px`;
+      panel.style.maxHeight = `${Math.max(0, viewport.height * 0.92)}px`;
+      const active = panel.ownerDocument.activeElement;
+      if (active instanceof HTMLElement && panel.contains(active)) {
+        const bounds = active.getBoundingClientRect();
+        const visible = panel.getBoundingClientRect();
+        if (bounds.top < visible.top || bounds.bottom > visible.bottom) {
+          active.scrollIntoView({ block: "nearest" });
+        }
+      }
+    };
+    const schedule = () => {
+      if (frame === null) frame = window.requestAnimationFrame(update);
+    };
+    update();
+    viewport.addEventListener("resize", schedule);
+    viewport.addEventListener("scroll", schedule);
+    window.addEventListener("resize", schedule);
+    return () => {
+      if (frame !== null) window.cancelAnimationFrame(frame);
+      viewport.removeEventListener("resize", schedule);
+      viewport.removeEventListener("scroll", schedule);
+      window.removeEventListener("resize", schedule);
+      resetDrawerKeyboardStyles(panel);
+    };
+  }, [open]);
 
   usePersistentOverlayFocus({
     onAfterCloseAutoFocus,

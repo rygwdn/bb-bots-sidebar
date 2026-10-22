@@ -23,9 +23,9 @@ afterEach(async () => {
 });
 const props = () => { if (!composer.props) throw new Error("Missing composer"); return composer.props; };
 
-async function mount({ bots = [bot], owners = [], rows = [thread("main", 100), thread("child", 90, { parentThreadId: "main" })], prepare, beforeList }: {
+async function mount({ bots = [bot], owners = [], rows = [thread("main", 100), thread("child", 90, { parentThreadId: "main" })], prepare, beforeList, create }: {
   bots?: BotMetadata[]; owners?: ProjectOwner[]; rows?: ReturnType<typeof thread>[];
-  prepare?: () => Promise<void>; beforeList?: () => void;
+  prepare?: () => Promise<void>; beforeList?: () => void; create?: (raw: unknown) => { threadId: string };
 } = {}) {
   const state = { bots, owners, personalId: personalProjectId };
   const onNavigate = vi.fn();
@@ -34,7 +34,7 @@ async function mount({ bots = [bot], owners = [], rows = [thread("main", 100), t
     rpc: {
       bots_list: () => { beforeList?.(); return rpcContract.bots_list.output.parse({ bots: state.bots, hosts: [{ id: "host", name: "Local", connected: true }], sections: [], projects: [{ id: "project", name: "Member project" }, { id: "owned", name: "Owned project" }], threadBindings: rows.map(row => ({ botId: bot.id, threadId: row.id })), warnings: [], personalProjectId: state.personalId, projectOwners: state.owners }); },
       bot_prepare: async (raw) => { await prepare?.(); const { botId } = rpcContract.bot_prepare.input.parse(raw); return state.bots.find(entry => entry.id === botId) ?? bot; },
-      conversation_create: () => ({ threadId: "created" }),
+      conversation_create: create ?? (() => ({ threadId: "created" })),
     },
   });
   await waitFor(() => expect(slot.queryByText("Loading bots…")).toBeNull());
@@ -105,6 +105,23 @@ it("refreshes ownership on click but never reseeds an open composer", async () =
   const chosen = { ...request, projectId: "project", environment: { type: "host" as const, hostId: "chosen-machine", workspace: { type: "personal" as const } } };
   await act(() => props().onSubmit(chosen));
   expect(slot.inspection.rpcCalls).toContainEqual({ method: "conversation_create", input: { botId: bot.id, request: chosen, makeMain: false } });
+});
+
+it("retains the Continuity choice after a rejected creation and lets the user turn it off before retrying", async () => {
+  const { slot, plus } = await mount({ create: raw => {
+    if (rpcContract.conversation_create.input.parse(raw).continuityEnabled) throw new Error("Continuity requires OMP");
+    return { threadId: "created" };
+  } });
+  fireEvent.click(plus()); await slot.findByRole("dialog", { name: "New conversation" });
+  const toggle = slot.getByRole("checkbox", { name: /Enable Continuity/ }) as HTMLInputElement;
+  fireEvent.click(toggle);
+  await act(async () => { await expect(props().onSubmit(request)).rejects.toThrow("Continuity requires OMP"); });
+  expect((await slot.findByRole("alert")).textContent).toBe("Continuity requires OMP");
+  expect(toggle.checked).toBe(true);
+  fireEvent.click(toggle);
+  await act(() => props().onSubmit(request));
+  expect(slot.queryByRole("dialog", { name: "New conversation" })).toBeNull();
+  expect(slot.inspection.navigateCalls).toContainEqual({ method: "toThread", threadId: "created", options: undefined });
 });
 
 it("does not use a stale ownership claim after it is released", async () => {
