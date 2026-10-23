@@ -324,7 +324,12 @@ export default async function plugin(bb: BbPluginApi) {
       const next = store.save({ ...latest, mainThreadId: threadId, updatedAt: nextTimestamp(latest.updatedAt) }); publish(); return next;
     }),
     resolveBotForThread: async ({ threadId }) => {
-      const botId = await resolveOwner(threadId);
+      let botId: string | null = null;
+      try {
+        botId = await resolveOwner(threadId, false);
+      } catch {
+        return null;
+      }
       return botId ? { botId, botName: store.require(botId).name } : null;
     },
     conversation_create: async ({ botId, request, makeMain, continuityEnabled = false }) => {
