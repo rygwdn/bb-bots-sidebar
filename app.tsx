@@ -24,7 +24,7 @@ import type {
   BbNavigate,
   PluginThreadListProps,
 } from "@get-bb/plugin-sdk/app";
-import type { BotAvatar, BotMetadata, BotSection, ProjectOwner, rpcContract } from "./contract";
+import type { BotAvatar, BotMemoryEntry, BotMetadata, BotSection, ProjectOwner, rpcContract } from "./contract";
 import { orderedBotConversationTree, conversationOwners } from "./lib/conversations";
 import { Button } from "@/components/ui/button";
 import {
@@ -167,6 +167,19 @@ function useBotData() {
   return { rpc, bots, hosts, sections, projects, threadBindings, warnings, personalProjectId, projectOwners, loaded, error, refresh };
 }
 
+function BotMemoryList({ state }: { state: { memories: BotMemoryEntry[]; available: boolean; detail?: string } | null }) {
+  if (!state) return <div className="flex flex-1 items-center justify-center text-xs text-muted-foreground">Loading memories...</div>;
+  if (!state.available) return <div className="flex flex-1 flex-col justify-center gap-1 text-xs text-muted-foreground"><span>BB memory is not available yet.</span>{state.detail ? <span className="truncate" title={state.detail}>{state.detail}</span> : null}</div>;
+  if (!state.memories.length) return <div className="flex flex-1 items-center justify-center text-xs text-muted-foreground">No bot memories yet. Facts are saved with bb memory add --scope bot.</div>;
+  return <ul className="min-h-0 flex-1 list-none overflow-y-auto rounded-md border border-input bg-background p-1 text-xs" aria-label="Bot memory list">
+    {state.memories.map((memory) => <li key={memory.id} className="flex flex-col gap-0.5 rounded px-2 py-1.5 hover:bg-accent/50">
+      <span className="flex items-center gap-1.5 font-medium text-foreground"><span className="truncate">{memory.name}</span>{memory.pinned ? <span className="rounded bg-accent px-1 text-[10px] text-accent-foreground">pinned</span> : null}<span className="rounded bg-muted px-1 text-[10px] text-muted-foreground">{memory.kind}</span></span>
+      <span className="text-muted-foreground">{memory.summary}</span>
+      {memory.tags.length ? <span className="text-[10px] text-muted-foreground">{memory.tags.join(" · ")}</span> : null}
+    </li>)}
+  </ul>;
+}
+
 function BotEditor({ target, hosts, sections, projects, bots, projectOwners, onClose, onCreate, onUpdate, onCreateSection, onCreateProject, onBrowseProjects }: ProjectCreationActions & {
   target: EditorTarget; hosts: HostOption[]; sections: BotSection[]; projects: ProjectOption[]; bots: BotMetadata[]; projectOwners: ProjectOwner[]; onClose: () => void;
   onCreateSection: (name: string) => Promise<BotSection>;
@@ -181,7 +194,19 @@ function BotEditor({ target, hosts, sections, projects, bots, projectOwners, onC
   const [memory, setMemory] = useState(editing ? target.metadata.memory : "");
   const [launchPreset, setLaunchPreset] = useState<LaunchPreset>(() => editing && target.metadata.launchPreset ? target.metadata.launchPreset : emptyLaunchPreset());
   const [settingsText, setSettingsText] = useState(() => `${JSON.stringify(editing ? target.metadata.settings : {}, null, 2)}\n`);
-  const [stateFile, setStateFile] = useState<"SOUL.md" | "MEMORY.md" | "settings.json">("SOUL.md");
+  const [stateFile, setStateFile] = useState<"SOUL.md" | "memory-bb" | "MEMORY.md" | "settings.json">("SOUL.md");
+  const rpc = useRpc<typeof rpcContract>();
+  const [botMemory, setBotMemory] = useState<{ memories: BotMemoryEntry[]; available: boolean; detail?: string } | null>(null);
+  useEffect(() => {
+    if (target.kind !== "edit" || stateFile !== "memory-bb") return;
+    const id = target.metadata.id;
+    let cancelled = false;
+    rpc.call("bot_memory_list", { botId: id }).then(
+      (result) => { if (!cancelled) setBotMemory(result); },
+      (cause) => { if (!cancelled) setBotMemory({ memories: [], available: false, detail: cause instanceof Error ? cause.message : String(cause) }); },
+    );
+    return () => { cancelled = true; };
+  }, [stateFile, rpc, target]);
   const portalScope = usePortalScopeProps();
   const initialOwners = editing ? target.projectOwners : projectOwners;
   const [owners] = useState(initialOwners);
@@ -300,13 +325,13 @@ function BotEditor({ target, hosts, sections, projects, bots, projectOwners, onC
           {tab === "context" ? <div className="flex h-full min-h-0 flex-col gap-2">
             <div className="flex shrink-0 items-center justify-between gap-2">
               <select aria-label="Context document" className="h-7 min-w-0 rounded border border-input bg-background px-2 text-xs text-foreground" value={stateFile} onChange={(event) => setStateFile(event.target.value as typeof stateFile)}>
-                <option value="SOUL.md">Instructions · SOUL.md</option><option value="MEMORY.md">Memory · MEMORY.md</option><option value="settings.json">Settings · settings.json</option>
+                <option value="SOUL.md">Instructions · SOUL.md</option><option value="memory-bb">Memory · BB memory</option><option value="MEMORY.md">Legacy memory · MEMORY.md (read-only)</option><option value="settings.json">Settings · settings.json</option>
               </select>
-              <span className="text-[10px] text-muted-foreground">{(stateFile === "SOUL.md" ? soul : stateFile === "MEMORY.md" ? memory : settingsText).length}/{stateFile === "SOUL.md" ? 4096 : stateFile === "MEMORY.md" ? MEMORY_MAX_CHARS : 16384}</span>
+              <span className="text-[10px] text-muted-foreground">{stateFile === "memory-bb" ? `${botMemory?.memories.length ?? "…"} memories` : `${(stateFile === "SOUL.md" ? soul : stateFile === "MEMORY.md" ? memory : settingsText).length}/${stateFile === "SOUL.md" ? 4096 : stateFile === "MEMORY.md" ? MEMORY_MAX_CHARS : 16384}`}</span>
             </div>
-            <textarea aria-label={stateFile} className="min-h-24 w-full flex-1 resize-none rounded-md border border-input bg-background px-3 py-2 font-mono text-xs text-foreground" value={stateFile === "SOUL.md" ? soul : stateFile === "MEMORY.md" ? memory : settingsText} maxLength={stateFile === "SOUL.md" ? 4096 : stateFile === "MEMORY.md" ? undefined : 16384} disabled={pending} spellCheck={stateFile === "SOUL.md"} onKeyDown={(event) => event.stopPropagation()} onKeyUp={(event) => event.stopPropagation()} onChange={(event) => stateFile === "SOUL.md" ? setSoul(event.target.value) : stateFile === "MEMORY.md" ? setMemory(event.target.value) : setSettingsText(event.target.value)} placeholder={stateFile === "SOUL.md" ? "Personality, perspective, and communication style." : undefined} />
+            {stateFile === "memory-bb" ? <BotMemoryList state={botMemory} /> : <textarea aria-label={stateFile} className="min-h-24 w-full flex-1 resize-none rounded-md border border-input bg-background px-3 py-2 font-mono text-xs text-foreground" value={stateFile === "SOUL.md" ? soul : stateFile === "MEMORY.md" ? memory : settingsText} maxLength={stateFile === "SOUL.md" ? 4096 : stateFile === "MEMORY.md" ? undefined : 16384} disabled={pending || stateFile === "MEMORY.md"} spellCheck={stateFile === "SOUL.md"} onKeyDown={(event) => event.stopPropagation()} onKeyUp={(event) => event.stopPropagation()} onChange={(event) => stateFile === "SOUL.md" ? setSoul(event.target.value) : stateFile === "MEMORY.md" ? setMemory(event.target.value) : setSettingsText(event.target.value)} placeholder={stateFile === "SOUL.md" ? "Personality, perspective, and communication style." : undefined} />}
             {stateFile === "MEMORY.md" && memory.length > MEMORY_MAX_CHARS ? <p role="status" className="text-xs text-destructive">Memory exceeds 3000 characters. Shorten it before saving a memory change. Existing text is kept.</p> : null}
-            <p className="shrink-0 text-[10px] text-muted-foreground">Private to this bot. Saved together with the bot; don’t store credentials here.</p>
+            {stateFile === "MEMORY.md" ? <p className="shrink-0 text-[10px] text-muted-foreground">Read-only legacy. Durable facts now live in BB memory; this file is kept until migration completes.</p> : <p className="shrink-0 text-[10px] text-muted-foreground">Private to this bot. Saved together with the bot; don’t store credentials here.</p>}
           </div> : null}
           <div hidden={tab !== "projects"}><BotProjectsPanel projects={projects} owners={owners} botNames={botNames} botId={botId} botName={name} hostId={hostId} hosts={hosts} linkedProjectIds={linkedProjectIds} ownedProjectIds={ownedProjectIds} onRoleChange={setProjectRole} onBusyChange={setProjectPending} onDraftChange={setProjectDraft} onCreateProject={onCreateProject} onBrowseProjects={onBrowseProjects} /></div>
         </div>

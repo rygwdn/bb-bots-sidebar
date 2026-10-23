@@ -1,7 +1,7 @@
 import { createHash, randomUUID } from "node:crypto";
 import type { BbPluginApi, PluginAgentConfigurationContext } from "@get-bb/plugin-sdk";
 import { z } from "zod";
-import { rpcContract, stateReadSchema, stateMutationSchema, stateMutationToolSchema, stateMutationResultSchema, normalizeStateMutation, type BotMetadata, type BotStateMutation } from "./contract";
+import { rpcContract, stateReadSchema, stateMutationSchema, stateMutationToolSchema, stateMutationResultSchema, normalizeStateMutation, botMemoryListOutputSchema, type BotMetadata, type BotStateMutation } from "./contract";
 import { createBotStore, EMPTY_HASHES, nextTimestamp } from "./lib/bot-store";
 import { applyState, BotStateConflictError, createPrivateBotState, stateContent } from "./lib/private-state";
 import { memoryFacts, mutateStateDocument } from "./lib/state-actions";
@@ -18,6 +18,8 @@ export { rpcContract, avatarSchema } from "./contract";
 export type { BotAvatar, BotMetadata, BotSection, ProjectCreateInput } from "./contract";
 
 const CHANGED = "project-bots-changed";
+// Canonical BB Memory fork (BI-14). Final plugin id pending BI-11 contract section 3.
+const MEMORY_FORK_PLUGIN_ID = "memory-fork";
 const START_MARKER = /^\[bb-bot-start:([a-f0-9-]{36})\]/;
 const sha256 = (content: string) => createHash("sha256").update(content).digest("hex");
 
@@ -332,6 +334,26 @@ export default async function plugin(bb: BbPluginApi) {
       }
       return botId ? { botId, botName: store.require(botId).name } : null;
     },
+    bot_memory_list: ({ botId }) => serial(botId, async () => {
+      store.require(botId);
+      try {
+        const { memories } = await bb.sdk.plugins.callRpc({
+          pluginId: MEMORY_FORK_PLUGIN_ID, method: "listMemories", input: null,
+          outputSchema: z.object({ memories: z.array(z.record(z.string(), z.unknown())) }),
+        });
+        const entries = memories
+          .filter((memory) => memory.scope === "bot" && memory.ownerBotId === botId)
+          .map((memory) => botMemoryListOutputSchema.shape.memories.element.parse({
+            id: memory.id, name: memory.name, summary: memory.summary, kind: memory.kind,
+            tags: memory.tags, importance: memory.importance, pinned: memory.pinned, updatedAt: memory.updatedAt,
+          }));
+        entries.sort((a, b) => Number(b.pinned) - Number(a.pinned) || b.importance - a.importance || b.updatedAt - a.updatedAt);
+        return { memories: entries, available: true };
+      } catch (error) {
+        // Fork not installed yet or RPC unavailable: keep the editor usable.
+        return { memories: [], available: false, detail: error instanceof Error ? error.message : String(error) };
+      }
+    }),
     conversation_create: async ({ botId, request, makeMain, continuityEnabled = false }) => {
       if (continuityEnabled && request.providerId !== "acp-omp") throw new Error("Continuity supports only OMP. Choose OMP or turn off Enable Continuity.");
       if (continuityEnabled && !(await bb.sdk.plugins.list()).plugins.some(plugin => plugin.id === "continuity" && plugin.status === "running")) throw new Error("Enable the Continuity plugin before starting a conversation with Continuity.");

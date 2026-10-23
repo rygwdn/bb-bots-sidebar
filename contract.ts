@@ -56,6 +56,12 @@ export const stateUpdateSchema = z.object({ file: stateFileSchema, content: z.st
 });
 export const stateTargetSchema = z.enum(["identity", "memory", "settings", "project"]);
 export const stateReadSchema = z.object({ target: stateTargetSchema }).strict();
+export const botMemoryEntrySchema = z.object({
+  id, name: z.string(), summary: z.string(), kind: z.string(), tags: z.array(z.string()),
+  importance: z.number().int(), pinned: z.boolean(), updatedAt: z.number(),
+}).strict();
+export type BotMemoryEntry = z.infer<typeof botMemoryEntrySchema>;
+export const botMemoryListOutputSchema = z.object({ memories: z.array(botMemoryEntrySchema), available: z.boolean(), detail: z.string().optional() }).strict();
 const settingKey = z.string().min(1).max(120).refine((key) => !["__proto__", "prototype", "constructor"].includes(key), "Reserved setting key");
 export const stateMutationSchema = z.union([
   z.object({ target: z.literal("identity"), action: z.literal("set"), expectedRevision: z.number().int().nonnegative(), name: z.string().trim().min(1).max(120).optional(), role: z.string().trim().max(80).optional(), soul: z.string().max(4096).optional() }).strict().refine((value) => [value.name, value.role, value.soul].some((field) => field !== undefined), "Provide at least one identity field"),
@@ -100,6 +106,7 @@ export const rpcContract = defineRpcContract({
   visibility_set: { input: z.object({ botId: id, hiddenUntilActivity: z.boolean() }).strict(), output: metadataSchema },
   main_set: { input: z.object({ botId: id, threadId: id }).strict(), output: metadataSchema },
   resolveBotForThread: { input: z.object({ threadId: id }).strict(), output: z.object({ botId: id, botName: z.string() }).nullable() },
+  bot_memory_list: { input: z.object({ botId: id }).strict(), output: botMemoryListOutputSchema },
   conversation_create: { input: z.object({ botId: id, request: newThreadRequestSchema, makeMain: z.boolean().optional(), continuityEnabled: z.boolean().optional() }).strict(), output: z.object({ threadId: id }).strict() },
   conversation_fork: { input: z.object({ botId: id, sourceThreadId: id, request: newThreadRequestSchema }).strict(), output: z.object({ threadId: id }).strict() },
   conversation_nest: { input: z.object({ threadId: id, parentThreadId: id }).strict(), output: z.object({ ok: z.literal(true) }).strict() },
