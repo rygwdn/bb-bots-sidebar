@@ -323,6 +323,10 @@ export default async function plugin(bb: BbPluginApi) {
       const latest = store.require(botId);
       const next = store.save({ ...latest, mainThreadId: threadId, updatedAt: nextTimestamp(latest.updatedAt) }); publish(); return next;
     }),
+    resolveBotForThread: async ({ threadId }) => {
+      const botId = await resolveOwner(threadId);
+      return botId ? { botId, botName: store.require(botId).name } : null;
+    },
     conversation_create: async ({ botId, request, makeMain, continuityEnabled = false }) => {
       if (continuityEnabled && request.providerId !== "acp-omp") throw new Error("Continuity supports only OMP. Choose OMP or turn off Enable Continuity.");
       if (continuityEnabled && !(await bb.sdk.plugins.list()).plugins.some(plugin => plugin.id === "continuity" && plugin.status === "running")) throw new Error("Enable the Continuity plugin before starting a conversation with Continuity.");

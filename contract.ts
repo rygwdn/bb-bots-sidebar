@@ -99,6 +99,7 @@ export const rpcContract = defineRpcContract({
   section_delete: { input: z.object({ sectionId: id }).strict(), output: z.object({ ok: z.literal(true) }).strict() },
   visibility_set: { input: z.object({ botId: id, hiddenUntilActivity: z.boolean() }).strict(), output: metadataSchema },
   main_set: { input: z.object({ botId: id, threadId: id }).strict(), output: metadataSchema },
+  resolveBotForThread: { input: z.object({ threadId: id }).strict(), output: z.object({ botId: id, botName: z.string() }).nullable() },
   conversation_create: { input: z.object({ botId: id, request: newThreadRequestSchema, makeMain: z.boolean().optional(), continuityEnabled: z.boolean().optional() }).strict(), output: z.object({ threadId: id }).strict() },
   conversation_fork: { input: z.object({ botId: id, sourceThreadId: id, request: newThreadRequestSchema }).strict(), output: z.object({ threadId: id }).strict() },
   conversation_nest: { input: z.object({ threadId: id, parentThreadId: id }).strict(), output: z.object({ ok: z.literal(true) }).strict() },
