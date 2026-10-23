@@ -369,7 +369,8 @@ it("injects fixed guidance, SOUL and all compliant memory, without archived bot 
   expect(configuration.instructions!.length).toBeLessThanOrEqual(4096);
   expect(configuration.instructions).toContain("[Truncated: use bot_read_state for complete state.]");
   const guidance = host.harness.inspection.registrations.agentTools.find(tool => tool.name === "bot_read_state")!.instructions!;
-  expect(guidance).toContain('"action":"overwrite"');
+  expect(guidance).toContain("bb memory add --scope bot");
+  expect(guidance).toContain("never append, overwrite, or route new facts there");
   expect(configuration.instructions).not.toContain("Archived instructions must not run");
   expect(configuration.instructions).not.toContain("## Bot operating instructions");
   expect(guidance).toContain("Current workspace/project AGENTS.md still applies");
