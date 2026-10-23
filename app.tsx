@@ -60,6 +60,7 @@ import { AvatarAppearance } from "./components/avatar-appearance";
 import { BotIcon } from "./components/bot-icon";
 import { SidebarBotIcon } from "./components/sidebar-bot-icon";
 import { MEMORY_MAX_CHARS } from "./lib/memory-limit";
+import { MEMORY_CLI } from "./lib/bot-instructions";
 import { emptyLaunchPreset, launchPresetSchema, type LaunchPreset } from "./lib/launch-preset";
 import { LaunchPresetEditor } from "./components/launch-preset-editor";
 import "./style.css";
@@ -170,7 +171,7 @@ function useBotData() {
 function BotMemoryList({ state }: { state: { memories: BotMemoryEntry[]; available: boolean; detail?: string } | null }) {
   if (!state) return <div className="flex flex-1 items-center justify-center text-xs text-muted-foreground">Loading memories...</div>;
   if (!state.available) return <div className="flex flex-1 flex-col justify-center gap-1 text-xs text-muted-foreground"><span>BB memory is not available yet.</span>{state.detail ? <span className="truncate" title={state.detail}>{state.detail}</span> : null}</div>;
-  if (!state.memories.length) return <div className="flex flex-1 items-center justify-center text-xs text-muted-foreground">No bot memories yet. Facts are saved with bb memory add --scope bot.</div>;
+  if (!state.memories.length) return <div className="flex flex-1 items-center justify-center text-xs text-muted-foreground">No bot memories yet. Facts are saved with {MEMORY_CLI} add --scope bot.</div>;
   return <ul className="min-h-0 flex-1 list-none overflow-y-auto rounded-md border border-input bg-background p-1 text-xs" aria-label="Bot memory list">
     {state.memories.map((memory) => <li key={memory.id} className="flex flex-col gap-0.5 rounded px-2 py-1.5 hover:bg-accent/50">
       <span className="flex items-center gap-1.5 font-medium text-foreground"><span className="truncate">{memory.name}</span>{memory.pinned ? <span className="rounded bg-accent px-1 text-[10px] text-accent-foreground">pinned</span> : null}<span className="rounded bg-muted px-1 text-[10px] text-muted-foreground">{memory.kind}</span></span>

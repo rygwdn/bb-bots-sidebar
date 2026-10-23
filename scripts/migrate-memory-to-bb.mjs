@@ -14,7 +14,7 @@
 
 import { execFileSync } from "node:child_process";
 
-const MEMORY_CLI = ["bb", "memory"]; // fork CLI name; updated per BI-11 contract section 3
+const MEMORY_CLI = ["bb", "memory"]; // BI-11 contract section 3: internal CLI name stays `memory`; single constant isolates any future namespacing
 
 function parseArgs(argv) {
   return { apply: argv.includes("--apply") };
