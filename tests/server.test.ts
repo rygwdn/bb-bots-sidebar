@@ -54,11 +54,11 @@ describe("private bot identities", () => {
     expect(host.harness.inspection.sdk.callsTo("threads.spawn")[0]?.[0]).toMatchObject({ sessionOptions });
   });
 
-  it("rejects first dispatch if Continuity fails and retains its start token for a safe retry", async () => {
+  it.each(["omp", "acp-omp"])("rejects first %s dispatch if Continuity fails and retains its start token for a safe retry", async (providerId) => {
     const host = await setup(); const bot = await host.create();
     const token = "12345678-1234-1234-1234-123456789abc";
     host.store.stageStart(token, bot.id, PERSONAL_ID, true);
-    const thread = makeThreadResponse({ id: "continuity-thread", projectId: PERSONAL_ID, providerId: "acp-omp", originPluginId: host.bb.pluginId });
+    const thread = makeThreadResponse({ id: "continuity-thread", projectId: PERSONAL_ID, providerId, originPluginId: host.bb.pluginId });
     const context = makeMessageDispatchHookContext({ thread, input: { blocks: [{ type: "text", text: `[bb-bot-start:${token}]`, mentions: [], visibility: "agent-only" }], text: "" } });
     const dispatch = host.harness.inspection.registrations.hooks["message.dispatch"]!;
     host.harness.sdk.stub("plugins.callRpc", async () => { throw new Error("Continuity unavailable"); });
@@ -69,6 +69,48 @@ describe("private bot identities", () => {
     expect(await dispatch(context)).toEqual({ action: "proceed" });
     expect(host.store.pendingStart(token)).toBeNull();
     expect(host.store.owner(thread.id)).toBe(bot.id);
+  });
+
+  it.each([
+    ["omp", PERSONAL_ID], ["acp-omp", PERSONAL_ID],
+    ["omp", "project"], ["acp-omp", "project"],
+  ])("enables Continuity before the first %s turn in %s", async (providerId, projectId) => {
+    const host = await setup(); const bot = await host.create();
+    host.harness.sdk.stub("plugins.list", async () => ({ plugins: [{
+      id: "continuity", name: "Continuity", source: "path:/plugins/continuity", sourceDisplay: "local",
+      rootDir: "/plugins/continuity", version: "1.0.0", provenance: "direct", publisherLabel: null,
+      isOrphanedBuiltin: false, enabled: true, status: "running", statusDetail: null,
+      description: null, icon: null, iconUrl: null, logoUrl: null, logoDarkUrl: null,
+      collections: [], screenshots: [], capabilities: [], providerIds: [], icons: {},
+      handlerStats: { count: 0, errorCount: 0, maxMs: 0, totalMs: 0 },
+      services: [], schedules: [], cliCommand: null, hasSettings: false,
+      app: { hasApp: false, bundle: null }, updateState: {},
+    }] }));
+    const enabledThreads: string[] = [];
+    host.harness.sdk.stub("plugins.callRpc", async ({ pluginId, method, input }) => {
+      expect(pluginId).toBe("continuity"); expect(method).toBe("setEnabled");
+      expect(host.initialConfigurations).toEqual([]);
+      const { threadId } = input as { threadId: string; enabled: boolean };
+      expect(input).toEqual({ threadId, enabled: true });
+      expect(host.threads.get(threadId)?.providerId).toBe(providerId);
+      enabledThreads.push(threadId);
+      return { enabled: true };
+    });
+    const result = await host.harness.behavior.callRpc("conversation_create", {
+      botId: bot.id, request: { ...request(projectId), providerId }, continuityEnabled: true,
+    }) as { threadId: string };
+    expect(enabledThreads).toEqual([result.threadId]);
+    expect(host.store.owner(result.threadId)).toBe(bot.id);
+    expect(host.initialConfigurations[0]?.instructions).toContain("You are Atlas.");
+  });
+
+  it.each(["omp", "acp-omp"])("refuses %s Continuity when the plugin is unavailable before spawning", async (providerId) => {
+    const host = await setup(); const bot = await host.create();
+    host.harness.sdk.stub("plugins.list", async () => ({ plugins: [] }));
+    await expect(host.harness.behavior.callRpc("conversation_create", {
+      botId: bot.id, request: { ...request(PERSONAL_ID), providerId }, continuityEnabled: true,
+    })).rejects.toThrow("Enable the Continuity plugin");
+    expect(host.threads.size).toBe(0);
   });
 
   it("refuses Continuity on another provider before creating any conversation", async () => {

@@ -43,3 +43,8 @@ The runtime plugin ID is `bots-sidebar`; its CLI is `bb bots`.
   checkout/fresh-worktree preference, and a starter prompt. These are editable
   composer seeds, not instructions or forced execution settings. Existing
   drafts and submitted choices win. Presets never change an existing session.
+- New-conversation composers offer Enable Continuity, off by default. It supports
+  native OMP (`omp`) and ACP OMP (`acp-omp`) only, with the Continuity plugin running.
+  Enablement occurs before the first provider launch; it does not retrofit an
+  existing runtime. Failed enablement rejects the first dispatch for retry.
+  Turn the option off to use another harness. Forks keep their existing flow.

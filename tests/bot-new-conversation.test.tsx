@@ -107,6 +107,29 @@ it("refreshes ownership on click but never reseeds an open composer", async () =
   expect(slot.inspection.rpcCalls).toContainEqual({ method: "conversation_create", input: { botId: bot.id, request: chosen, makeMain: false } });
 });
 
+it.each(["omp", "acp-omp"])("starts a fresh %s bot conversation with an explicit Continuity opt-in", async (providerId) => {
+  const { slot, plus } = await mount();
+  fireEvent.click(plus()); await slot.findByRole("dialog", { name: "New conversation" });
+  const toggle = slot.getByRole("checkbox", { name: /Enable Continuity/ }) as HTMLInputElement;
+  expect(toggle.checked).toBe(false);
+  fireEvent.click(toggle);
+  await act(() => props().onSubmit({ ...request, providerId }));
+  expect(slot.queryByRole("dialog", { name: "New conversation" })).toBeNull();
+  expect(slot.inspection.navigateCalls).toContainEqual({ method: "toThread", threadId: "created", options: undefined });
+});
+
+it("rejects a non-OMP Continuity submission locally and keeps the composer available", async () => {
+  const { slot, plus } = await mount();
+  fireEvent.click(plus()); await slot.findByRole("dialog", { name: "New conversation" });
+  fireEvent.click(slot.getByRole("checkbox", { name: /Enable Continuity/ }));
+  await act(async () => { await expect(props().onSubmit({ ...request, providerId: "pi" })).rejects.toThrow("Continuity supports only OMP"); });
+  expect(slot.inspection.rpcCalls.some(call => call.method === "conversation_create")).toBe(false);
+  expect(slot.getByRole("alert").textContent).toContain("Choose OMP");
+  fireEvent.click(slot.getByRole("checkbox", { name: /Enable Continuity/ }));
+  await act(() => props().onSubmit({ ...request, providerId: "pi" }));
+  expect(slot.inspection.navigateCalls).toContainEqual({ method: "toThread", threadId: "created", options: undefined });
+});
+
 it("retains the Continuity choice after a rejected creation and lets the user turn it off before retrying", async () => {
   const { slot, plus } = await mount({ create: raw => {
     if (rpcContract.conversation_create.input.parse(raw).continuityEnabled) throw new Error("Continuity requires OMP");
@@ -115,7 +138,7 @@ it("retains the Continuity choice after a rejected creation and lets the user tu
   fireEvent.click(plus()); await slot.findByRole("dialog", { name: "New conversation" });
   const toggle = slot.getByRole("checkbox", { name: /Enable Continuity/ }) as HTMLInputElement;
   fireEvent.click(toggle);
-  await act(async () => { await expect(props().onSubmit(request)).rejects.toThrow("Continuity requires OMP"); });
+  await act(async () => { await expect(props().onSubmit({ ...request, providerId: "omp" })).rejects.toThrow("Continuity requires OMP"); });
   expect((await slot.findByRole("alert")).textContent).toBe("Continuity requires OMP");
   expect(toggle.checked).toBe(true);
   fireEvent.click(toggle);

@@ -41,12 +41,15 @@ export function ConversationDialog({ target, onClose, onCreate }: {
       <DialogHeader><DialogTitle>{title}</DialogTitle><DialogDescription>{description}</DialogDescription></DialogHeader>
       {target.kind !== "fork" ? <label className="flex items-start gap-2 text-sm">
         <input type="checkbox" checked={continuityEnabled} disabled={pending} onChange={(event) => setContinuityEnabled(event.target.checked)} />
-        <span>Enable Continuity<span className="block text-xs text-muted-foreground">OMP only. Preserve context through automatic rollover and idle summaries.</span></span>
+        <span>Enable Continuity<span className="block text-xs text-muted-foreground">OMP (native or ACP). Preserve context through automatic rollover and idle summaries.</span></span>
       </label> : null}
       <NewThreadComposer {...seeds} defaultProjectId={projectId} defaultEnvironment={target.environment} layout="document" focusRequest={1} draftKey={conversationDraftKey({ botId: target.bot.id, kind: target.kind, makeMain: target.makeMain, projectId, environment: target.environment })} onSubmit={async (request) => {
         if (submitting.current) throw new Error("A conversation is already being created.");
         submitting.current = true; setPending(true); setError(null);
-        try { await onCreate(request, continuityEnabled); }
+        try {
+          if (continuityEnabled && request.providerId !== "omp" && request.providerId !== "acp-omp") throw new Error("Continuity supports only OMP. Choose OMP or turn off Enable Continuity.");
+          await onCreate(request, continuityEnabled);
+        }
         catch (cause) { setError(cause instanceof Error ? cause.message : String(cause)); throw cause; }
         finally { submitting.current = false; setPending(false); }
       }} />

@@ -240,9 +240,12 @@ in bot state.
   work context or a linked project is preselected, and you can change
   the project, machine, and harness inside the popup before sending.
 - The new-conversation popup includes **Enable Continuity** (off by default).
-  It requires OMP and the enabled Continuity plugin. Opt-in is saved before the
-  first message is admitted, so the provider loads it on its initial start.
-  Other harnesses report an error rather than silently ignoring the selection.
+  It requires OMP (native provider ID `omp` or ACP provider ID `acp-omp`) and the
+  running Continuity plugin. Both the composer submission and server RPC reject
+  other providers when opted in; turning it off keeps all harnesses available.
+  Opt-in is saved before the first message is admitted, so the provider loads it
+  on its initial start. A failed Continuity startup rejects dispatch and retains
+  the start token for retry rather than silently starting without the policy.
   Forks retain their existing flow and do not offer this new-thread option.
   On mobile, the drawer follows the visible viewport above the keyboard and
   keeps its controls scrollable.
@@ -305,6 +308,15 @@ npm run test:thread-list
 npm run build
 bb plugin install . --yes
 ```
+
+An existing Git-managed installation cannot be replaced by a local-path install.
+Use its tracked branch for normal updates; do not uninstall to switch sources,
+because uninstall also deletes plugin settings, secrets, and schedules. If a
+local cache hotfix is explicitly authorized, base it on the exact deployed commit,
+back up the replaced sources and bundles, retain the committed authoritative
+checkout and matching SHA-256 manifest, then reload only `bots-sidebar`.
+The registered Git source does not change, and its next update can overwrite
+that hotfix; integrate the repair into the tracked branch before updating.
 
 This fork tracks [tobi/bb-bots-sidebar](https://github.com/tobi/bb-bots-sidebar).
 Avatar appearance options are adapted from

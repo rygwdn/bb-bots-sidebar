@@ -54,7 +54,7 @@ export async function backend(initialProjects: Project[] = [project()]) {
       get: async ({ threadId }) => { const found = threads.get(threadId); if (!found) throw new Error("Thread missing"); return found; },
       spawn: async (args) => {
         if (failSpawn) throw new Error("Spawn failed");
-        const value = makeThreadResponse({ id: `thread-${++sequence}`, projectId: args.projectId, originPluginId: host.bb.pluginId, parentThreadId: args.parentThreadId ?? null, createdAt: Date.now() });
+        const value = makeThreadResponse({ id: `thread-${++sequence}`, projectId: args.projectId, providerId: args.providerId, originPluginId: host.bb.pluginId, parentThreadId: args.parentThreadId ?? null, createdAt: Date.now() });
         threads.set(value.id, value);
         const created = await host.harness.behavior.emitThreadEvent("thread.created", { thread: value });
         if (created.errors.length) throw created.errors[0];

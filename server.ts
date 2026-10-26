@@ -355,7 +355,7 @@ export default async function plugin(bb: BbPluginApi) {
       }
     }),
     conversation_create: async ({ botId, request, makeMain, continuityEnabled = false }) => {
-      if (continuityEnabled && request.providerId !== "acp-omp") throw new Error("Continuity supports only OMP. Choose OMP or turn off Enable Continuity.");
+      if (continuityEnabled && request.providerId !== "omp" && request.providerId !== "acp-omp") throw new Error("Continuity supports only OMP. Choose OMP or turn off Enable Continuity.");
       if (continuityEnabled && !(await bb.sdk.plugins.list()).plugins.some(plugin => plugin.id === "continuity" && plugin.status === "running")) throw new Error("Enable the Continuity plugin before starting a conversation with Continuity.");
       if (request.projectId !== await personalProjectId()) await updateProjectRole(botId, "join", request.projectId);
       return serial(botId, async () => {
